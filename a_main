@@ -1,0 +1,2175 @@
+package com.samyak.Fragments;
+
+import android.app.AlertDialog;
+import android.app.ProgressDialog;
+import android.content.Context;
+import android.content.DialogInterface;
+import android.content.Intent;
+import android.net.ConnectivityManager;
+import android.net.Uri;
+import android.os.Bundle;
+import android.os.Environment;
+import android.os.Handler;
+import android.os.StatFs;
+import android.support.v4.app.Fragment;
+import android.support.v4.app.FragmentManager;
+import android.util.Log;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.view.animation.TranslateAnimation;
+import android.widget.Button;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+
+import com.google.android.gms.ads.AdListener;
+import com.google.android.gms.ads.AdRequest;
+import com.google.android.gms.ads.InterstitialAd;
+import com.itextpdf.text.BaseColor;
+import com.itextpdf.text.Document;
+import com.itextpdf.text.Element;
+import com.itextpdf.text.Font;
+import com.itextpdf.text.FontFactory;
+import com.itextpdf.text.Image;
+import com.itextpdf.text.PageSize;
+import com.itextpdf.text.Paragraph;
+import com.itextpdf.text.Phrase;
+import com.itextpdf.text.pdf.ColumnText;
+import com.itextpdf.text.pdf.PdfContentByte;
+import com.itextpdf.text.pdf.PdfCopy;
+import com.itextpdf.text.pdf.PdfImportedPage;
+import com.itextpdf.text.pdf.PdfPCell;
+import com.itextpdf.text.pdf.PdfPTable;
+import com.itextpdf.text.pdf.PdfReader;
+import com.itextpdf.text.pdf.PdfWriter;
+import com.itextpdf.text.pdf.codec.BmpImage;
+import com.samyak.HeaderAndFooter;
+import com.samyak.R;
+
+import org.apache.http.HttpEntity;
+import org.apache.http.HttpResponse;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.entity.ContentType;
+import org.apache.http.entity.mime.HttpMultipartMode;
+import org.apache.http.entity.mime.MultipartEntityBuilder;
+import org.apache.http.entity.mime.content.FileBody;
+import org.apache.http.entity.mime.content.StringBody;
+import org.apache.http.impl.client.DefaultHttpClient;
+import org.apache.http.util.EntityUtils;
+import org.apache.poi.hssf.usermodel.HSSFFont;
+import org.apache.poi.hssf.usermodel.HSSFSheet;
+import org.apache.poi.hssf.usermodel.HSSFWorkbook;
+import org.apache.poi.hssf.util.HSSFColor;
+import org.apache.poi.hwpf.HWPFDocument;
+import org.apache.poi.hwpf.usermodel.Range;
+import org.apache.poi.hwpf.usermodel.Table;
+import org.apache.poi.poifs.filesystem.POIFSFileSystem;
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.DateUtil;
+import org.apache.poi.ss.usermodel.Row;
+
+import java.io.BufferedReader;
+import java.io.DataInputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.FileReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.Iterator;
+import java.util.List;
+
+import au.com.bytecode.opencsv.CSVReader;
+
+public class HomeFragment extends Fragment {
+
+    public static final String errormsg = "Error! Some files may not be converted to PDF file";
+    public static final String docxlsmsg = "Error! Can't make connection to server";
+    public static final String uploadmsg = "Error! File can not be uploaded to server";
+    public static final String downloadmsg = "Error! File can not be downloaded from server";
+    public static final String UPLOAD_URL = "http://10.100.112.91:6090/FileUpload/";
+//    public static final String UPLOAD_URL = "http://glrinfo.com:6090/FileUpload/";
+    public static final String UPLOAD_SERVLET = "ImageUploadServlet";
+    public static final String DOWNLOAD_FOLDER = "DocUpload/";
+    private final int SECONDARY_ACTIVITY_REQUEST_CODE = 1;
+    public int filecount = 0;
+    public ArrayList<String> pdffiles = new ArrayList<String>();
+    public String destinationFile1 = null;
+    public int size = 0;
+    public int index = 0;
+    boolean errorflag = false;
+    boolean uploadflag = false;
+    boolean downloadflag = false;
+    boolean pdfflag = false;
+    boolean docxflag = false;
+    HttpClient httpClient = null;
+    HttpPost httpPost = null;
+    String alreadypdf = "";
+    InterstitialAd mInterstitialAd;
+    private TextView textviewTitle;
+    private LinearLayout background;
+    private TextView tvHeading;
+    private Button btnSelectFile;
+    private Button btnConvert;
+    private ArrayList<File> Files = null;
+    private boolean writeflag = false;
+    private boolean isConnected = false;
+    private File newDirectory;
+    private String destinationFile;
+    private ProgressDialog progDailog;
+    private File outputFile;
+    private Document document;
+    private PdfWriter pdfWriter;
+    private TextView txtSourceFile;
+    private Handler handler = new Handler();
+    private String fileName;
+
+    public HomeFragment() {
+        // Required empty public constructor
+    }
+
+    @Override
+    public View onCreateView(LayoutInflater inflater, ViewGroup container,
+                             Bundle savedInstanceState) {
+        // Inflate the layout for this fragment
+
+        View view = inflater.inflate(R.layout.fragment_home, container, false);
+        background = (LinearLayout) view.findViewById(R.id.background);
+        txtSourceFile = (TextView) view.findViewById(R.id.txtSourceFileName);
+        txtSourceFile.setEnabled(false);
+//        background.getBackground().setLevel(0);
+
+        tvHeading = (TextView) view.findViewById(R.id.tvheading);
+        TranslateAnimation animation = new TranslateAnimation(0.0f, 0.0f,
+                -30.0f, 30.0f);
+        animation.setDuration(4000);
+        animation.setRepeatCount(15);
+        animation.setRepeatMode(1);
+        tvHeading.startAnimation(animation);
+
+        mInterstitialAd = new InterstitialAd(getActivity());
+        mInterstitialAd.setAdUnitId("ca-app-pub-1713818242363443/8716177214");
+        requestNewInterstitial();
+        mInterstitialAd.setAdListener(new AdListener() {
+            @Override
+            public void onAdLoaded() {
+                super.onAdLoaded();
+                // mInterstitialAd.show(); // you can call this anywhere you
+                // want
+                // System.out.println("Ad is loaded @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
+            }
+
+            @Override
+            public void onAdFailedToLoad(int errorCode) {
+                super.onAdFailedToLoad(errorCode);
+                // System.out.println("Ad is not loaded ###########################################");
+
+            }
+
+            @Override
+            public void onAdClosed() {
+                requestNewInterstitial();
+                // successAlert();
+            }
+        });
+
+        Bundle bundle = getArguments();
+        if (bundle != null) {
+            Files = (ArrayList<File>) bundle.getSerializable("upload");
+//            System.out.println("From Result : " + Files);
+            txtSourceFile.setText(getActivity().getResources()
+                    .getString(R.string.no_files_selected) + Files.size());
+            txtSourceFile.setVisibility(View.VISIBLE);
+        }
+
+
+        btnSelectFile = (Button) view.findViewById(R.id.btnSelectFile);
+        btnSelectFile.setOnClickListener(new View.OnClickListener() {
+
+            @Override
+            public void onClick(View v) {
+//                new Crashlytics().crash();
+                filecount = 0;
+                // Now there is no use of SelectFileChooser.java we can delete
+                // it.
+               /* Intent intent = new Intent(getActivity(),
+                        FileSelectionActivity.class);
+                // We can also remove above line no use..!!
+                startActivityForResult(intent, 0);*/
+
+                FragmentManager fragmentManager = getFragmentManager();
+                fragmentManager.beginTransaction().replace(R.id.frame, new FileSelectionFragment(), "FileSelectionFragment").addToBackStack(null).commit();
+            }
+        });
+
+        btnConvert = (Button) view.findViewById(R.id.btnConvert);
+        btnConvert.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+//                System.out.println("Inside Button Action");
+                if (Files == null || Files.size() == 0) {
+                    // Toast.makeText(context,"Please Select Some Files before converting...!",Toast.LENGTH_LONG).show();
+                    AlertDialog.Builder alert = new AlertDialog.Builder(
+                            getActivity());
+                    alert.setTitle("Alert!");
+                    alert.setMessage("Please Select Some Files before converting...!");
+                    alert.setNegativeButton("Ok",
+                            new DialogInterface.OnClickListener() {
+                                public void onClick(DialogInterface dialog,
+                                                    int whichButton) {
+                                    dialog.dismiss();
+                                }
+                            });
+                    alert.show();
+                } else {    //or else if (checkConnection()==false){
+                    try {
+                        pdffiles = new ArrayList<String>();
+                        writeflag = false;
+                        pdfflag = false;
+                        errorflag = false;
+                        isConnected = false;
+                        uploadflag = false;
+                        downloadflag = false;
+                        // destinationFile = new
+                        // SimpleDateFormat("yyyyMMddhhmmss'.pdf'").format(new
+                        // Date());
+                        SimpleDateFormat sdf = new SimpleDateFormat(
+                                "yyyy-MM-ddHH:mm:ss.SSS");
+                        destinationFile = sdf.format(new Date())
+                                .replaceAll("-", "").replaceAll(":", "_")
+                                .replaceAll("\\.", "")
+                                + ".pdf";
+                        Log.e("formatted date"," destinationFile" + sdf.format(new Date()));
+                        newDirectory = new File(Environment
+                                .getExternalStorageDirectory().getPath()
+                                + "/DocToPDFConverter/"
+                                + new SimpleDateFormat("yyyy-MM-dd")
+                                .format(new Date()) + "/");// +new
+                        // SimpleDateFormat("yyyyMMdd").format(new
+                        // Date())+"/"
+                        if (!newDirectory.exists()) {
+                            newDirectory.mkdirs();
+                        }
+//                        System.out
+//                                .println("destinationFile :: destinationFile :: "
+//                                        + destinationFile);
+
+                        outputFile = new File(newDirectory, destinationFile);
+                        System.out.println("outputFile :: outputFile :: "
+                                + outputFile);
+                        progDailog = ProgressDialog.show(getActivity(),
+                                "Please Wait...", "Converting to PDF file",
+                                true);
+                        document = new Document(PageSize.A4, 36, 72, 108, 180);
+
+                        try {
+                            if (Files.size() > 0) {
+                                size = Files.size();
+                                pdfWriter = PdfWriter.getInstance(document,
+                                        new FileOutputStream(outputFile));
+                                document.open();
+
+                                convertintopdf();
+                            }
+                        } catch (Exception e) {
+
+                        }
+
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+
+            }
+        });
+
+
+        return view;
+    }
+
+    private void requestNewInterstitial() {
+//        System.out.println("In request Function ::::::::::::::: ");
+        AdRequest adRequest1 = new AdRequest.Builder()
+//		.addTestDevice("B05BD5B89C964ED63C51E0E76741BA63")
+                .build();
+
+        mInterstitialAd.loadAd(adRequest1);
+    }
+
+    private void convertintopdf() {
+        new Thread() {
+            @Override
+            public void run() {
+                try {
+                    if (filecount < Files.size()) {
+                        if (filecount > 0) {
+                            document.newPage();
+                        }
+//                        System.out.println("File Couunt ::" + filecount
+//                                + " Error Flag :: " + errorflag);
+                        if (Files.get(filecount).length() != 0) {
+
+                            convert(Files.get(filecount), outputFile, pdfWriter);
+
+                        } else {
+                            errorflag = true;
+                            filecount = filecount + 1;
+                            convertintopdf();
+                        }
+                        sleep(5000);
+                    } else {
+                        // progDailog.dismiss();
+                        // document.close();
+                        Files = null;
+
+                        if (pdffiles.size() > 0) {
+                            if (writeflag) {
+                                pdffiles.add(outputFile.toString());
+                            }
+                            mergepdf();
+                        } else {
+                            System.out.println("Error Flag ::" + errorflag);
+                            System.out.println("uploadflag :: " + uploadflag);
+                            handler.sendEmptyMessage(0);
+                            progDailog.dismiss();
+                            getActivity().runOnUiThread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    try {
+                                        if (errorflag) {
+
+                                            // toast // Error converting to pdf
+                                            // file. Please Try again
+                                            // Toast.makeText(context,errormsg,Toast.LENGTH_LONG).show();
+                                            /*
+                                             * AlertDialog.Builder alert = new
+											 * AlertDialog
+											 * .Builder(MainActivity.this);
+											 * alert.setTitle("Alert!");
+											 * alert.setMessage(errormsg);
+											 * alert.setNegativeButton("Ok", new
+											 * DialogInterface.OnClickListener()
+											 * { public void
+											 * onClick(DialogInterface dialog,
+											 * int whichButton) {
+											 * dialog.dismiss(); } });
+											 * alert.show();
+											 */
+                                            if (filecount == 1) {
+                                                AlertDialog.Builder alert = new AlertDialog.Builder(
+                                                        getActivity());
+                                                alert.setTitle("Alert!");
+                                                alert.setMessage(errormsg);
+                                                alert.setNegativeButton(
+                                                        "Ok",
+                                                        new DialogInterface.OnClickListener() {
+                                                            public void onClick(
+                                                                    DialogInterface dialog,
+                                                                    int whichButton) {
+                                                                dialog.dismiss();
+                                                            }
+                                                        });
+
+                                                alert.show();
+                                            } else {
+                                                AlertDialog.Builder alert = new AlertDialog.Builder(
+                                                        getActivity());
+                                                alert.setTitle("Alert!");
+                                                alert.setMessage(errormsg);
+                                                alert.setPositiveButton(
+                                                        "Merge Remaining Files",
+                                                        new DialogInterface.OnClickListener() {
+                                                            public void onClick(
+                                                                    DialogInterface dialog,
+                                                                    int whichButton) {
+                                                                dialog.dismiss();
+                                                            }
+                                                        });
+                                                alert.setNegativeButton(
+                                                        "Cancel",
+                                                        new DialogInterface.OnClickListener() {
+                                                            public void onClick(
+                                                                    DialogInterface dialog,
+                                                                    int whichButton) {
+                                                                outputFile
+                                                                        .delete();
+                                                                dialog.dismiss();
+                                                            }
+                                                        });
+
+                                                alert.show();
+                                            }
+                                            txtSourceFile.setText("");
+                                            txtSourceFile
+                                                    .setVisibility(View.INVISIBLE);
+                                            index = 0;
+                                            size = 0;
+                                            document.close();
+
+                                        } else if (isConnected) {
+                                            // toast // To convert docx and xlsx
+                                            // you need to have internet
+                                            // connectivity
+                                            // Toast.makeText(context,docxlsmsg,Toast.LENGTH_LONG).show();
+											/*
+											 * AlertDialog.Builder alert = new
+											 * AlertDialog
+											 * .Builder(MainActivity.this);
+											 * alert.setTitle("Alert!");
+											 * alert.setMessage(docxlsmsg);
+											 * alert.setNegativeButton("Ok", new
+											 * DialogInterface.OnClickListener()
+											 * { public void
+											 * onClick(DialogInterface dialog,
+											 * int whichButton) {
+											 * dialog.dismiss(); } });
+											 * alert.show();
+											 */
+                                            if (filecount == 1) {
+                                                AlertDialog.Builder alert = new AlertDialog.Builder(
+                                                        getActivity());
+                                                alert.setTitle("Alert!");
+                                                alert.setMessage(docxlsmsg);
+                                                alert.setNegativeButton(
+                                                        "Ok",
+                                                        new DialogInterface.OnClickListener() {
+                                                            public void onClick(
+                                                                    DialogInterface dialog,
+                                                                    int whichButton) {
+                                                                dialog.dismiss();
+                                                            }
+                                                        });
+
+                                                alert.show();
+                                            } else {
+                                                AlertDialog.Builder alert = new AlertDialog.Builder(
+                                                        getActivity());
+                                                alert.setTitle("Alert!");
+                                                alert.setMessage(docxlsmsg);
+                                                alert.setPositiveButton(
+                                                        "Merge Remaining Files",
+                                                        new DialogInterface.OnClickListener() {
+                                                            public void onClick(
+                                                                    DialogInterface dialog,
+                                                                    int whichButton) {
+                                                                dialog.dismiss();
+                                                            }
+                                                        });
+                                                alert.setNegativeButton(
+                                                        "Cancel",
+                                                        new DialogInterface.OnClickListener() {
+                                                            public void onClick(
+                                                                    DialogInterface dialog,
+                                                                    int whichButton) {
+                                                                outputFile
+                                                                        .delete();
+                                                                dialog.dismiss();
+                                                            }
+                                                        });
+
+                                                alert.show();
+                                            }
+                                            txtSourceFile.setText("");
+                                            txtSourceFile
+                                                    .setVisibility(View.INVISIBLE);
+                                            index = 0;
+                                            size = 0;
+                                            document.close();
+
+                                        } else if (uploadflag) {
+                                            // System.out.println("Files.size() :: "+Files.size());
+                                            if (filecount == 1) {
+                                                AlertDialog.Builder alert = new AlertDialog.Builder(
+                                                        getActivity());
+                                                alert.setTitle("Alert!");
+                                                alert.setMessage(uploadmsg);
+                                                alert.setNegativeButton(
+                                                        "Ok",
+                                                        new DialogInterface.OnClickListener() {
+                                                            public void onClick(
+                                                                    DialogInterface dialog,
+                                                                    int whichButton) {
+                                                                dialog.dismiss();
+                                                            }
+                                                        });
+
+                                                alert.show();
+                                            } else {
+                                                AlertDialog.Builder alert = new AlertDialog.Builder(
+                                                        getActivity());
+                                                alert.setTitle("Alert!");
+                                                alert.setMessage(uploadmsg);
+                                                alert.setPositiveButton(
+                                                        "Merge Remaining Files",
+                                                        new DialogInterface.OnClickListener() {
+                                                            public void onClick(
+                                                                    DialogInterface dialog,
+                                                                    int whichButton) {
+                                                                dialog.dismiss();
+                                                            }
+                                                        });
+                                                alert.setNegativeButton(
+                                                        "Cancel",
+                                                        new DialogInterface.OnClickListener() {
+                                                            public void onClick(
+                                                                    DialogInterface dialog,
+                                                                    int whichButton) {
+                                                                outputFile
+                                                                        .delete();
+                                                                dialog.dismiss();
+                                                            }
+                                                        });
+
+                                                alert.show();
+                                            }
+                                            txtSourceFile.setText("");
+                                            txtSourceFile
+                                                    .setVisibility(View.INVISIBLE);
+                                            index = 0;
+                                            size = 0;
+                                            document.close();
+                                            // alert.show();
+
+                                        } else if (downloadflag) {
+                                            if (filecount == 1) {
+                                                AlertDialog.Builder alert = new AlertDialog.Builder(
+                                                        getActivity());
+                                                alert.setTitle("Alert!");
+                                                alert.setMessage(downloadmsg);
+                                                alert.setNegativeButton(
+                                                        "Ok",
+                                                        new DialogInterface.OnClickListener() {
+                                                            public void onClick(
+                                                                    DialogInterface dialog,
+                                                                    int whichButton) {
+                                                                dialog.dismiss();
+                                                            }
+                                                        });
+
+                                                alert.show();
+                                            } else {
+                                                AlertDialog.Builder alert = new AlertDialog.Builder(
+                                                        getActivity());
+                                                alert.setTitle("Alert!");
+                                                alert.setMessage(downloadmsg);
+                                                alert.setPositiveButton(
+                                                        "Merge Remaining Files",
+                                                        new DialogInterface.OnClickListener() {
+                                                            public void onClick(
+                                                                    DialogInterface dialog,
+                                                                    int whichButton) {
+                                                                dialog.dismiss();
+                                                            }
+                                                        });
+                                                alert.setNegativeButton(
+                                                        "Cancel",
+                                                        new DialogInterface.OnClickListener() {
+                                                            public void onClick(
+                                                                    DialogInterface dialog,
+                                                                    int whichButton) {
+                                                                outputFile
+                                                                        .delete();
+                                                                dialog.dismiss();
+                                                            }
+                                                        });
+
+                                                alert.show();
+                                            }
+                                            txtSourceFile.setText("");
+                                            txtSourceFile
+                                                    .setVisibility(View.INVISIBLE);
+                                            index = 0;
+                                            size = 0;
+                                            document.close();
+                                            // alert.show();
+                                        } else {
+											/*
+											 * AlertDialog.Builder alert = new
+											 * AlertDialog
+											 * .Builder(MainActivity.this);
+											 * alert
+											 * .setTitle(getApplicationContext
+											 * ().
+											 * getResources().getString(R.string
+											 * .title_sucess_message));
+											 * alert.setMessage
+											 * (getApplicationContext
+											 * ().getResources
+											 * ().getString(R.string
+											 * .sucess_mesage));
+											 * alert.setNeutralButton
+											 * ("Get Pro Version", new
+											 * DialogInterface.OnClickListener()
+											 * { public void
+											 * onClick(DialogInterface dialog,
+											 * int whichButton) { Intent
+											 * browserIntent = new
+											 * Intent(Intent.ACTION_VIEW, Uri
+											 * .parse(
+											 * "https://play.google.com/store/apps/details?id=com.samyakPaid&hl=en"
+											 * ));
+											 * browserIntent.addFlags(Intent.
+											 * FLAG_ACTIVITY_CLEAR_TOP);
+											 * startActivity(browserIntent);
+											 *
+											 * } });
+											 * alert.setNegativeButton("Ok", new
+											 * DialogInterface.OnClickListener()
+											 * { public void
+											 * onClick(DialogInterface dialog,
+											 * int whichButton) {
+											 * dialog.dismiss(); } });
+											 * alert.show();
+											 * txtSourceFile.setText("");
+											 * txtSourceFile
+											 * .setVisibility(View.INVISIBLE);
+											 * index = 0; size = 0;
+											 * document.close();
+											 */
+                                            // if (mInterstitialAd.isLoaded()) {
+                                            // mInterstitialAd.show();
+                                            // } else {
+                                            // System.out.println("In else condiyion!!!");
+                                            successAlert();
+                                            // }
+
+                                        }
+                                    } catch (Exception e) {
+                                        outputFile.delete();
+                                    }
+                                }
+                            });
+                            // if(outputFile.length() == 0)
+                            // {
+                            // outputFile.delete();
+                            // }
+                            try {
+                                // AlertDialog.Builder alert = new
+                                // AlertDialog.Builder(MainActivity.this);
+                                // alert.setTitle(getApplicationContext().getResources().getString(R.string.title_sucess_message));
+                                // alert.setMessage(getApplicationContext().getResources().getString(R.string.sucess_mesage));
+                                // alert.setNegativeButton("Ok",
+                                // new DialogInterface.OnClickListener() {
+                                // public void onClick(DialogInterface dialog,
+                                // int whichButton) {
+                                // dialog.dismiss();
+                                // }
+                                // });
+                                // alert.show();
+                                // txtSourceFile.setText("");
+                                // txtSourceFile.setVisibility(View.GONE);
+                                // document.close();
+                            } catch (Exception e) {
+                                // outputFile.delete();
+                            }
+
+                        }
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        }.start();
+    }
+
+    private void mergepdf() {
+
+        try {
+            document.close();
+        } catch (Exception e) {
+
+        }
+        System.out.println("pdffiles ::pdffiles :: " + pdffiles);
+        try {
+            // String[] files= { "File1.pdf","File2.pdf" };
+            Document PDFCombineUsingJava = new Document(PageSize.A4, 36, 72,
+                    108, 150);
+            // String destinationFile1 = new
+            // SimpleDateFormat("yyyyMMddhhmmss'.pdf'").format(new Date());
+            SimpleDateFormat sdf = new SimpleDateFormat(
+                    "yyyy-MM-ddHH:mm:ss.SSS");
+            destinationFile1 = sdf.format(new Date()).replaceAll("-", "_")
+                    .replaceAll(":", "_").replaceAll("\\.", "")
+                    + ".pdf";
+            PdfCopy copy = new PdfCopy(PDFCombineUsingJava,
+                    new FileOutputStream(
+                            Environment.getExternalStorageDirectory().getPath()
+                                    + "/DocToPDFConverter/"
+                                    + new SimpleDateFormat("yyyy-MM-dd")
+                                    .format(new Date()) + "/"
+                                    + destinationFile1));
+            PDFCombineUsingJava.open();
+            PdfReader ReadInputPDF;
+            System.out.println("Writeflag ::" + writeflag);
+            int number_of_pages;
+            System.out.println("Total No of files ::" + pdffiles.size());
+            PdfCopy.PageStamp stamp;
+            PdfContentByte cb = copy.getDirectContent();
+            PdfImportedPage page1;
+            if (writeflag) {
+                for (int i = pdffiles.size() - 1; i >= 0; i--) {
+                    System.out.println("Merging file no::" + i);
+                    ReadInputPDF = new PdfReader(pdffiles.get(i));
+                    number_of_pages = ReadInputPDF.getNumberOfPages();
+                    // pdfWriter.setPageEvent(new HeaderAndFooter());
+
+                    for (int page = 0; page < number_of_pages; ) {
+                        if (pdffiles.get(i) != outputFile.toString()) {
+                            int temp = page;
+                            page1 = copy.getImportedPage(ReadInputPDF, ++temp);
+                            stamp = copy.createPageStamp(page1);
+                            ColumnText
+                                    .showTextAligned(
+                                            stamp.getUnderContent(),
+                                            Element.ALIGN_RIGHT,
+                                            new Phrase(
+                                                    String.format("Powered by Samyak Infotech Pvt. Ltd."),
+                                                    HeaderAndFooter.footerFont),
+                                            PDFCombineUsingJava.right() - 2,
+                                            20, 0);
+                            stamp.alterContents();
+                        }
+                        copy.addPage(copy.getImportedPage(ReadInputPDF, ++page));
+                    }
+                }
+            } else {
+                for (int i = 0; i < pdffiles.size(); i++) {
+                    ReadInputPDF = new PdfReader(pdffiles.get(i));
+                    number_of_pages = ReadInputPDF.getNumberOfPages();
+                    // pdfWriter.setPageEvent(new HeaderAndFooter());
+                    for (int page = 0; page < number_of_pages; ) {
+                        if (pdffiles.get(i) != outputFile.toString()) {
+                            int temp = page;
+                            page1 = copy.getImportedPage(ReadInputPDF, ++temp);
+                            stamp = copy.createPageStamp(page1);
+                            ColumnText
+                                    .showTextAligned(
+                                            stamp.getUnderContent(),
+                                            Element.ALIGN_RIGHT,
+                                            new Phrase(
+                                                    String.format("Powered by Samyak Infotech Pvt. Ltd."),
+                                                    HeaderAndFooter.footerFont),
+                                            PDFCombineUsingJava.right() - 2,
+                                            20, 0);
+                            stamp.alterContents();
+                        }
+                        copy.addPage(copy.getImportedPage(ReadInputPDF, ++page));
+                    }
+                }
+            }
+            PDFCombineUsingJava.close();
+            // System.out.println("writeflag : :writeflag ::: "+writeflag);
+            // System.out.println("docxflag : :docxflag ::: "+docxflag);
+            // System.out.println("pdfflag : :pdfflag ::: "+pdfflag);
+            // System.out.println("outputFile : :outputFile ::: "+outputFile);
+            // if(writeflag || docxflag || pdfflag)
+            // {
+            // File oldfile = new File(pdffiles.get(0));
+            outputFile.delete();
+            // }
+            // activity.runOnUiThread(new Runnable() {
+            // @Override
+            // public void run() {
+            // try
+            // {
+            // // if(errorflag)
+            // // {
+            // //
+            // // // toast // Error converting to pdf file. Please Try again
+            // //// Toast.makeText(context,errormsg,Toast.LENGTH_LONG).show();
+            // // AlertDialog.Builder alert = new
+            // AlertDialog.Builder(MainActivity.this);
+            // // alert.setTitle("Alert!");
+            // // alert.setMessage(errormsg);
+            // // alert.setNegativeButton("Ok",
+            // // new DialogInterface.OnClickListener() {
+            // // public void onClick(DialogInterface dialog,
+            // // int whichButton) {
+            // // dialog.dismiss();
+            // // }
+            // // });
+            // // alert.show();
+            // // }
+            // // if(isConnected)
+            // // {
+            // // // toast // To convert docx and xlsx you need to have internet
+            // connectivity
+            // //// Toast.makeText(context,docxlsmsg,Toast.LENGTH_LONG).show();
+            // // AlertDialog.Builder alert = new
+            // AlertDialog.Builder(MainActivity.this);
+            // // alert.setTitle("Alert!");
+            // // alert.setMessage(docxlsmsg);
+            // // alert.setNegativeButton("Ok",
+            // // new DialogInterface.OnClickListener() {
+            // // public void onClick(DialogInterface dialog,
+            // // int whichButton) {
+            // // dialog.dismiss();
+            // // }
+            // // });
+            // // alert.show();
+            // // }
+            // }
+            // catch(Exception e)
+            // {
+            //
+            // }
+            // }
+            //
+            // });
+
+        } catch (Exception i) {
+            i.printStackTrace();
+            errorflag = true;
+        } finally {
+
+            getActivity().runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        txtSourceFile.setText("");
+                        txtSourceFile.setVisibility(View.GONE);
+                        handler.sendEmptyMessage(0);
+                        progDailog.dismiss();
+                        index = 0;
+                        size = 0;
+                        if (errorflag) {
+
+                            // toast // Error converting to pdf file. Please Try
+                            // again
+                            // Toast.makeText(context,errormsg,Toast.LENGTH_LONG).show();
+                            // AlertDialog.Builder alert = new
+                            // AlertDialog.Builder(MainActivity.this);
+                            // alert.setTitle("Alert!");
+                            // alert.setMessage(errormsg);
+                            // alert.setNegativeButton("Ok",
+                            // new DialogInterface.OnClickListener() {
+                            // public void onClick(DialogInterface dialog,
+                            // int whichButton) {
+                            // dialog.dismiss();
+                            // }
+                            // });
+                            // alert.show();
+                            if (pdffiles.size() == 1) {
+                                AlertDialog.Builder alert = new AlertDialog.Builder(
+                                        getActivity());
+                                alert.setTitle("Alert!");
+                                alert.setMessage(errormsg);
+                                alert.setNegativeButton("Ok",
+                                        new DialogInterface.OnClickListener() {
+                                            public void onClick(
+                                                    DialogInterface dialog,
+                                                    int whichButton) {
+                                                dialog.dismiss();
+                                            }
+                                        });
+
+                                alert.show();
+                            } else {
+                                AlertDialog.Builder alert = new AlertDialog.Builder(
+                                        getActivity());
+                                alert.setTitle("Alert!");
+                                alert.setMessage(errormsg);
+                                alert.setPositiveButton(
+                                        "Merge Remaining Files",
+                                        new DialogInterface.OnClickListener() {
+                                            public void onClick(
+                                                    DialogInterface dialog,
+                                                    int whichButton) {
+                                                dialog.dismiss();
+                                            }
+                                        });
+                                alert.setNegativeButton("Cancel",
+                                        new DialogInterface.OnClickListener() {
+                                            public void onClick(
+                                                    DialogInterface dialog,
+                                                    int whichButton) {
+                                                // System.out.println("In delete function :: "
+                                                // + destinationFile1);
+                                                File temp = new File(
+                                                        Environment
+                                                                .getExternalStorageDirectory()
+                                                                .getPath()
+                                                                + "/DocToPDFConverter/"
+                                                                + new SimpleDateFormat(
+                                                                "yyyy-MM-dd")
+                                                                .format(new Date())
+                                                                + "/"
+                                                                + destinationFile1);
+                                                temp.delete();
+                                                dialog.dismiss();
+                                            }
+                                        });
+
+                                alert.show();
+                            }
+                        } else if (isConnected) {
+                            // toast // To convert docx and xlsx you need to
+                            // have internet connectivity
+                            // Toast.makeText(context,docxlsmsg,Toast.LENGTH_LONG).show();
+							/*
+							 * AlertDialog.Builder alert = new
+							 * AlertDialog.Builder(MainActivity.this);
+							 * alert.setTitle("Alert!");
+							 * alert.setMessage(docxlsmsg);
+							 * alert.setNegativeButton("Ok", new
+							 * DialogInterface.OnClickListener() { public void
+							 * onClick(DialogInterface dialog, int whichButton)
+							 * { dialog.dismiss(); } }); alert.show();
+							 */
+                            if (pdffiles.size() == 1) {
+                                AlertDialog.Builder alert = new AlertDialog.Builder(
+                                        getActivity());
+                                alert.setTitle("Alert!");
+                                alert.setMessage(docxlsmsg);
+                                alert.setNegativeButton("Ok",
+                                        new DialogInterface.OnClickListener() {
+                                            public void onClick(
+                                                    DialogInterface dialog,
+                                                    int whichButton) {
+                                                dialog.dismiss();
+                                            }
+                                        });
+
+                                alert.show();
+                            } else {
+                                AlertDialog.Builder alert = new AlertDialog.Builder(
+                                        getActivity());
+                                alert.setTitle("Alert!");
+                                alert.setMessage(errormsg);
+                                alert.setPositiveButton(
+                                        "Merge Remaining Files",
+                                        new DialogInterface.OnClickListener() {
+                                            public void onClick(
+                                                    DialogInterface dialog,
+                                                    int whichButton) {
+                                                dialog.dismiss();
+                                            }
+                                        });
+                                alert.setNegativeButton("Cancel",
+                                        new DialogInterface.OnClickListener() {
+                                            public void onClick(
+                                                    DialogInterface dialog,
+                                                    int whichButton) {
+                                                // System.out.println("In delete function :: "
+                                                // + destinationFile1);
+                                                File temp = new File(
+                                                        Environment
+                                                                .getExternalStorageDirectory()
+                                                                .getPath()
+                                                                + "/DocToPDFConverter/"
+                                                                + new SimpleDateFormat(
+                                                                "yyyy-MM-dd")
+                                                                .format(new Date())
+                                                                + "/"
+                                                                + destinationFile1);
+                                                temp.delete();
+                                                dialog.dismiss();
+                                            }
+                                        });
+
+                                alert.show();
+                            }
+                        } else if (uploadflag) {
+                            if (pdffiles.size() == 1) {
+                                AlertDialog.Builder alert = new AlertDialog.Builder(
+                                        getActivity());
+                                alert.setTitle("Alert!");
+                                alert.setMessage(docxlsmsg);
+                                alert.setNegativeButton("Ok",
+                                        new DialogInterface.OnClickListener() {
+                                            public void onClick(
+                                                    DialogInterface dialog,
+                                                    int whichButton) {
+                                                dialog.dismiss();
+                                            }
+                                        });
+
+                                alert.show();
+                            } else {
+                                AlertDialog.Builder alert = new AlertDialog.Builder(
+                                        getActivity());
+                                alert.setTitle("Alert!");
+                                alert.setMessage(docxlsmsg);
+                                alert.setPositiveButton(
+                                        "Merge Remaining Files",
+                                        new DialogInterface.OnClickListener() {
+                                            public void onClick(
+                                                    DialogInterface dialog,
+                                                    int whichButton) {
+                                                dialog.dismiss();
+                                            }
+                                        });
+                                alert.setNegativeButton("Cancel",
+                                        new DialogInterface.OnClickListener() {
+                                            public void onClick(
+                                                    DialogInterface dialog,
+                                                    int whichButton) {
+                                                // System.out.println("In delete function :: "
+                                                // + destinationFile1);
+                                                File temp = new File(
+                                                        Environment
+                                                                .getExternalStorageDirectory()
+                                                                .getPath()
+                                                                + "/DocToPDFConverter/"
+                                                                + new SimpleDateFormat(
+                                                                "yyyy-MM-dd")
+                                                                .format(new Date())
+                                                                + "/"
+                                                                + destinationFile1);
+                                                temp.delete();
+                                                dialog.dismiss();
+                                            }
+                                        });
+
+                                alert.show();
+                            }
+                        } else if (downloadflag) {
+                            if (pdffiles.size() == 1) {
+                                AlertDialog.Builder alert = new AlertDialog.Builder(
+                                        getActivity());
+                                alert.setTitle("Alert!");
+                                alert.setMessage(downloadmsg);
+                                alert.setNegativeButton("Ok",
+                                        new DialogInterface.OnClickListener() {
+                                            public void onClick(
+                                                    DialogInterface dialog,
+                                                    int whichButton) {
+                                                dialog.dismiss();
+                                            }
+                                        });
+
+                                alert.show();
+                            } else {
+                                AlertDialog.Builder alert = new AlertDialog.Builder(
+                                        getActivity());
+                                alert.setTitle("Alert!");
+                                alert.setMessage(downloadmsg);
+                                alert.setPositiveButton(
+                                        "Merge Remaining Files",
+                                        new DialogInterface.OnClickListener() {
+                                            public void onClick(
+                                                    DialogInterface dialog,
+                                                    int whichButton) {
+                                                dialog.dismiss();
+                                            }
+                                        });
+                                alert.setNegativeButton("Cancel",
+                                        new DialogInterface.OnClickListener() {
+                                            public void onClick(
+                                                    DialogInterface dialog,
+                                                    int whichButton) {
+                                                File temp = new File(
+                                                        Environment
+                                                                .getExternalStorageDirectory()
+                                                                .getPath()
+                                                                + "/DocToPDFConverter/"
+                                                                + new SimpleDateFormat(
+                                                                "yyyy-MM-dd")
+                                                                .format(new Date())
+                                                                + "/"
+                                                                + destinationFile1);
+                                                temp.delete();
+                                                dialog.dismiss();
+                                            }
+                                        });
+
+                                alert.show();
+                            }
+							/*
+							 * AlertDialog.Builder alert = new
+							 * AlertDialog.Builder(MainActivity.this);
+							 * alert.setTitle("Alert!");
+							 * alert.setMessage(downloadmsg);
+							 * alert.setNegativeButton("Ok", new
+							 * DialogInterface.OnClickListener() { public void
+							 * onClick(DialogInterface dialog, int whichButton)
+							 * { dialog.dismiss(); } });
+							 *
+							 * alert.show();
+							 */
+                        } else {
+							/*
+							 * AlertDialog.Builder alert = new
+							 * AlertDialog.Builder(MainActivity.this);
+							 * alert.setTitle
+							 * (getApplicationContext().getResources
+							 * ().getString(R.string.title_sucess_message));
+							 * alert
+							 * .setMessage(getApplicationContext().getResources
+							 * ().getString(R.string.sucess_mesage));
+							 * alert.setNeutralButton("Get Pro Version", new
+							 * DialogInterface.OnClickListener() { public void
+							 * onClick(DialogInterface dialog, int whichButton)
+							 * { Intent browserIntent = new
+							 * Intent(Intent.ACTION_VIEW, Uri .parse(
+							 * "https://play.google.com/store/apps/details?id=com.samyakPaid&hl=en"
+							 * ));
+							 * browserIntent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP
+							 * ); startActivity(browserIntent);
+							 *
+							 * } }); alert.setNegativeButton("Ok", new
+							 * DialogInterface.OnClickListener() { public void
+							 * onClick(DialogInterface dialog, int whichButton)
+							 * { dialog.dismiss(); } }); alert.show();
+							 */
+                            successAlert();
+                        }
+                    } catch (Exception e) {
+
+                    }
+                }
+            });
+
+        }
+    }
+
+    private void successAlert() {
+        AlertDialog.Builder alert = new AlertDialog.Builder(getActivity());
+        alert.setTitle(getActivity().getApplicationContext().getResources().getString(
+                R.string.title_sucess_message));
+        alert.setCancelable(false);
+        alert.setMessage(getActivity().getApplicationContext().getResources().getString(
+                R.string.sucess_mesage));
+        alert.setNeutralButton("Get Pro Version",
+                new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface dialog, int whichButton) {
+                        Intent browserIntent = new Intent(
+                                Intent.ACTION_VIEW,
+                                Uri.parse("https://play.google.com/store/apps/details?id=com.samyakPaid&hl=en"));
+                        browserIntent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                        startActivity(browserIntent);
+
+                    }
+                });
+        alert.setNegativeButton("Ok", new DialogInterface.OnClickListener() {
+            public void onClick(DialogInterface dialog, int whichButton) {
+                dialog.dismiss();
+                if (mInterstitialAd.isLoaded()) {
+                    mInterstitialAd.show();
+                } else {
+
+                }
+            }
+        });
+        alert.show();
+        txtSourceFile.setText("");
+        txtSourceFile.setVisibility(View.INVISIBLE);
+        index = 0;
+        size = 0;
+        document.close();
+    }
+
+    private void convert(File fin, File fout, PdfWriter pdfWriter) {
+        // we have to call this method every time we want to convert file
+        ConnectivityManager connec = (ConnectivityManager) getActivity().getSystemService(Context.CONNECTIVITY_SERVICE);
+        String sourceFile = null;
+//        System.out.println("Converting file :: " + fin.toString());
+        sourceFile = fin.toString();
+
+        AlertDialog.Builder alertDialogBuilder = new AlertDialog.Builder(getActivity());
+        alertDialogBuilder.setTitle("Alert!");
+        if (sourceFile == null || sourceFile.equals("") || sourceFile.isEmpty()
+                && destinationFile == null || destinationFile.equals("")) {
+            if (sourceFile == null || sourceFile.equals("")
+                    || sourceFile.isEmpty()) {
+                alertDialogBuilder.setMessage("Please Select File ");
+            } else if (destinationFile == null || destinationFile.equals("")) {
+                alertDialogBuilder.setMessage("Destination File Is Required");
+            }
+
+            alertDialogBuilder.setPositiveButton("OK",
+                    new DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(DialogInterface dialog, int id) {
+                            dialog.cancel();
+
+                        }
+                    });
+
+            AlertDialog alertDialog = alertDialogBuilder.create();
+            alertDialog.show();
+        } else {
+            StatFs stat = new StatFs(Environment.getExternalStorageDirectory()
+                    .getPath());
+            double sdAvailSize = (double) stat.getAvailableBlocks()
+                    * (double) stat.getBlockSize();
+            double gigaAvailable = sdAvailSize / 1073741824;
+            double megAvailable = sdAvailSize / 1048576;
+
+            File path = fin;
+
+            double bytes = path.length();
+            long l = (new Double(bytes)).longValue();
+
+            if (sdAvailSize <= l) {
+                alertDialogBuilder
+                        .setMessage("Not Enough Space On your Memory Card.So Please remove some items!");
+                alertDialogBuilder.setPositiveButton("OK",
+                        new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface dialog, int id) {
+                                dialog.cancel();
+
+                            }
+                        });
+                AlertDialog alertDialog = alertDialogBuilder.create();
+                alertDialog.show();
+            } else {
+
+                if (!destinationFile.contains(".pdf")) {
+                    destinationFile = destinationFile + ".pdf";
+                }
+
+                if (sourceFile.endsWith(".doc")) {
+
+                    System.out.println(".doc--------------------- called");
+
+                    if(bytes <= 250000){
+                        boolean isTableAdded = false;
+                        try {
+                            writeflag = true;
+                            InputStream fis = new FileInputStream(sourceFile);
+                            POIFSFileSystem fs = new POIFSFileSystem(fis);
+                            HWPFDocument doc = new HWPFDocument(fs);
+
+                            pdfWriter.setPageEvent(new HeaderAndFooter());
+
+						/* Getting the range of Doc file */
+                            Range range = doc.getRange();
+
+						/* To Find the 1st index of TABLE in doc file */
+                            int firstIndexOfTableParagraph = 0;
+
+						/* check->index for traversing Paragraphs */
+                            for (int check = 0; check < range.numParagraphs(); check++) {
+                                if (range.getParagraph(check).isInTable()) {
+                                    firstIndexOfTableParagraph = check;
+                                    break;
+                                }
+                            }
+                            org.apache.poi.hwpf.usermodel.Paragraph tablePar = range
+                                    .getParagraph(firstIndexOfTableParagraph);
+
+                            Table table = range.getTable(tablePar);
+                            PdfPTable tableInPDF = new PdfPTable(table.getRow(0)
+                                    .numCells());
+
+                            int j = 0;
+                            // System.out.println("range.numParagraphs() :: range.numParagraphs():: "+range.numParagraphs());
+                            if (range.numParagraphs() > 0) {
+
+                                for (int i = 0; i < range.numParagraphs(); i++) {
+                                    org.apache.poi.hwpf.usermodel.Paragraph par = range
+                                            .getParagraph(i);
+                                    if (par.isInTable()) {
+
+                                        if (!par.isTableRowEnd()) {
+                                            String temp = par.text().toString();
+                                            tableInPDF.addCell(par.text()
+                                                    .toString());
+                                        }
+                                        isTableAdded = true;
+                                        j++;
+                                    } else {
+                                        if (isTableAdded) {
+                                            document.add(tableInPDF);
+                                            isTableAdded = false;
+                                        }
+                                        document.add(new com.itextpdf.text.Paragraph(
+                                                par.text().toString()));
+                                    }
+
+                                    if (i == (range.numParagraphs() - 1)) {
+                                        filecount = filecount + 1;
+                                        convertintopdf();
+                                    }
+                                }
+                            } else {
+                                filecount = filecount + 1;
+                                convertintopdf();
+                            }
+
+                            // if(filecount <size)
+                            // {
+                            // filecount = filecount +1;
+                            // convertintopdf();
+                            // convert(Files.get(index),outputFile,pdfWriter);
+                            // }
+                        } catch (Exception e) {
+                            errorflag = true;
+                            // if(filecount <size)
+                            // {
+                            filecount = filecount + 1;
+                            convertintopdf();
+                            // convert(Files.get(index),outputFile,pdfWriter);
+                            // }
+                            e.printStackTrace();
+                        }
+                    } else {
+                        if (checkConnection()) {
+                            isConnected = false;
+                            // You are connected, do something online.
+//                            docxflag = true;
+                            Uploadfile(sourceFile, "", fin.toString());
+                            // UploadFileService upload = new
+                            // UploadFileService(sourceFile,"",fin.toString());
+                            // upload.execute();
+
+                        } else {
+
+                            // Not connected.
+                            //
+                            isConnected = true;
+                            // errorflag = true;
+                            // if(filecount <size)
+                            // {
+                            filecount = filecount + 1;
+                            convertintopdf();
+                            // convert(Files.get(index),outputFile,pdfWriter);
+                            // }
+
+                        }
+                    }
+
+
+                } else if (sourceFile.endsWith(".docx")
+                        || sourceFile.endsWith(".xlsx")) {
+
+                    if (checkConnection()) {
+                        isConnected = false;
+                        // You are connected, do something online.
+                        docxflag = true;
+                        Uploadfile(sourceFile, "", fin.toString());
+                        // UploadFileService upload = new
+                        // UploadFileService(sourceFile,"",fin.toString());
+                        // upload.execute();
+
+                    } else {
+
+                        // Not connected.
+                        //
+                        isConnected = true;
+                        // errorflag = true;
+                        // if(filecount <size)
+                        // {
+                        filecount = filecount + 1;
+                        convertintopdf();
+                        // convert(Files.get(index),outputFile,pdfWriter);
+                        // }
+
+                    }
+
+                } else if (sourceFile.endsWith(".xls")) {
+
+                    if(bytes <= 5000000){
+                        try {
+
+                            writeflag = true;
+                            FileInputStream sourceInput = new FileInputStream(
+                                    sourceFile);
+                            HSSFWorkbook xlsWorkBook = new HSSFWorkbook(sourceInput);
+                            HSSFSheet worksheet = xlsWorkBook.getSheetAt(0);
+                            Iterator<Row> rowIterator = worksheet.iterator();
+                            pdfWriter.setPageEvent(new HeaderAndFooter());
+                            int totalColumns = worksheet.getRow(0).getLastCellNum();
+
+                            PdfPTable my_table = new PdfPTable(totalColumns);
+                            PdfPCell table_cell = null;
+
+                            while (rowIterator.hasNext()) {
+                                Row row = rowIterator.next();
+                                for (int i = 0; i < totalColumns; i++) {
+                                    if (row.getCell(i) == null) {
+                                        row.createCell(i);
+                                    }
+                                }
+                                Iterator<Cell> cellIterator = row.cellIterator();
+
+                                while (cellIterator.hasNext()) {
+                                    Cell cell = cellIterator.next(); // Fetch CELL
+
+                                    switch (cell.getCellType()) {
+                                        case Cell.CELL_TYPE_STRING:
+                                            HSSFFont font = xlsWorkBook.getFontAt(cell
+                                                    .getCellStyle().getFontIndex());
+                                            short boldWeight = font.getBoldweight();
+                                            int fontStyle = Font.NORMAL;
+                                            if (boldWeight == 700) {
+                                                fontStyle = Font.BOLD;
+                                            }
+                                            Font cellFont = FontFactory.getFont(
+                                                    font.getFontName(), 12, fontStyle);
+                                            HSSFColor color = font
+                                                    .getHSSFColor(xlsWorkBook);
+                                            if (color != null) {
+                                                short[] rgb = color.getTriplet();
+                                                cellFont = FontFactory.getFont(font
+                                                                .getFontName(), 12, fontStyle,
+                                                        new BaseColor(rgb[0], rgb[1],
+                                                                rgb[2]));
+                                            }
+
+                                            table_cell = new PdfPCell(
+                                                    new Phrase(
+                                                            cell.getStringCellValue(),
+                                                            cellFont));
+                                            // System.out.println("Cell Type String"+cell.getStringCellValue());
+                                            my_table.addCell(table_cell);
+                                            break;
+
+                                        case Cell.CELL_TYPE_NUMERIC:
+
+                                            int num = (int) cell.getNumericCellValue();
+
+                                            if (DateUtil.isCellDateFormatted(cell)) {
+                                                Calendar date = Calendar.getInstance();
+                                                Calendar cal = date;
+                                                cal.set(Calendar.MINUTE,
+                                                        date.get(Calendar.MINUTE));
+                                                cal.set(Calendar.SECOND,
+                                                        date.get(Calendar.SECOND));
+                                                cal.set(Calendar.MILLISECOND,
+                                                        date.get(Calendar.MILLISECOND));
+                                                // System.out.println("hour"+date.get(Calendar.HOUR));
+                                                // System.out.println("min"+date.get(Calendar.MINUTE));
+                                                // System.out.println("sec"+date.get(Calendar.SECOND));
+                                                // System.out.println("msc"+date.get(Calendar.MILLISECOND));
+                                                SimpleDateFormat sdf = new SimpleDateFormat(
+                                                        "MM/dd/yyyy");
+                                                String cell1 = sdf.format(cell
+                                                        .getDateCellValue());
+                                                // System.out.println("cell1"+cell1);
+                                                table_cell = new PdfPCell(new Phrase(
+                                                        cell1));
+
+                                            } else {
+                                                table_cell = new PdfPCell(new Phrase(
+                                                        String.valueOf(num)));
+                                                // System.out.println("Cell Type numeric"+cell.getNumericCellValue());
+                                            }
+                                            my_table.addCell(table_cell);
+                                            break;
+
+                                        case Cell.CELL_TYPE_BLANK:
+                                            // System.out.println("Cell Type blank");
+                                            table_cell = new PdfPCell(new Phrase());
+                                            // System.out.println("Cell Type blank"+table_cell);
+                                            my_table.addCell(table_cell);
+                                            break;
+
+                                        case Cell.CELL_TYPE_BOOLEAN:
+                                            // System.out.println("Cell Type boolean");
+                                            boolean bol = cell.getBooleanCellValue();
+                                            // System.out.println("Cell Type voolean"+bol);
+                                            table_cell = new PdfPCell(new Phrase(
+                                                    String.valueOf(bol)));
+                                            my_table.addCell(table_cell);
+                                            break;
+
+                                        default:
+                                            System.out.println("Inside Default");
+                                    }
+                                }
+                            }
+                            document.add(my_table);
+                            sourceInput.close();
+                            // if(filecount <size)
+                            // {
+                            filecount = filecount + 1;
+                            convertintopdf();
+                            // convert(Files.get(index),outputFile,pdfWriter);
+                            // }
+                        } catch (Exception e) {
+                            errorflag = true;
+                            // if(filecount <size)
+                            // {
+                            filecount = filecount + 1;
+                            convertintopdf();
+                            // convert(Files.get(index),outputFile,pdfWriter);
+                            // }
+                            e.printStackTrace();
+                        }
+                    } else {
+                        if (checkConnection()) {
+                            isConnected = false;
+                            // You are connected, do something online.
+//                            docxflag = true;
+                            Uploadfile(sourceFile, "", fin.toString());
+                            // UploadFileService upload = new
+                            // UploadFileService(sourceFile,"",fin.toString());
+                            // upload.execute();
+
+                        } else {
+
+                            // Not connected.
+                            //
+                            isConnected = true;
+                            // errorflag = true;
+                            // if(filecount <size)
+                            // {
+                            filecount = filecount + 1;
+                            convertintopdf();
+                            // convert(Files.get(index),outputFile,pdfWriter);
+                            // }
+
+                        }
+                    }
+
+                } else if (sourceFile.endsWith(".csv")) {
+                    if(bytes <= 5000000){
+                        CSVReader reader = null;
+                        try {
+                            writeflag = true;
+                            System.out.println("Inside CSV File" + sourceFile);
+                            reader = new CSVReader(new FileReader(sourceFile));
+                            pdfWriter.setPageEvent(new HeaderAndFooter());
+                            List<String[]> entryList = reader.readAll();
+                            PdfPTable csvTable = new PdfPTable(
+                                    entryList.get(0).length);
+                            PdfPCell cell;
+                            for (int i = 0; i < entryList.size(); i++) {
+                                String[] strings = entryList.get(i);
+                                for (int j = 0; j < strings.length; j++) {
+                                    // System.out.println("Strings"+strings.length);
+                                    cell = new PdfPCell(new Phrase(strings[j]));
+                                    csvTable.addCell(cell);
+                                }
+                            }
+                            document.add(csvTable);
+                            // if(filecount <size)
+                            // {
+                            filecount = filecount + 1;
+                            convertintopdf();
+                            // convert(Files.get(index),outputFile,pdfWriter);
+                            // }
+                        } catch (Exception e) {
+                            errorflag = true;
+                            // if(filecount <size)
+                            // {
+                            filecount = filecount + 1;
+                            convertintopdf();
+                            // convert(Files.get(index),outputFile,pdfWriter);
+                            // }
+                            e.printStackTrace();
+                        }
+                    } else {
+                        if (checkConnection()) {
+                            isConnected = false;
+                            // You are connected, do something online.
+//                            docxflag = true;
+                            Uploadfile(sourceFile, "", fin.toString());
+                            // UploadFileService upload = new
+                            // UploadFileService(sourceFile,"",fin.toString());
+                            // upload.execute();
+
+                        } else {
+
+                            // Not connected.
+                            //
+                            isConnected = true;
+                            // errorflag = true;
+                            // if(filecount <size)
+                            // {
+                            filecount = filecount + 1;
+                            convertintopdf();
+                            // convert(Files.get(index),outputFile,pdfWriter);
+                            // }
+
+                        }
+                    }
+
+                } else if (sourceFile.endsWith(".txt")) {
+                    if(bytes <= 5000000){
+                        FileInputStream fis = null;
+                        DataInputStream in = null;
+                        InputStreamReader isr = null;
+                        BufferedReader br = null;
+                        try {
+                            writeflag = true;
+                            document.open();
+                            Font myfont = new Font();
+                            Font bold_font = new Font();
+                            bold_font.setStyle(Font.BOLD);
+                            bold_font.setSize(10);
+                            myfont.setStyle(Font.NORMAL);
+                            myfont.setSize(10);
+                            document.add(new Paragraph("\n"));
+                            if (fin.exists()) {
+                                fis = new FileInputStream(fin);
+                                in = new DataInputStream(fis);
+                                isr = new InputStreamReader(in);
+                                br = new BufferedReader(isr);
+                                String strLine;
+                                while ((strLine = br.readLine()) != null) {
+                                    Paragraph para = new Paragraph(strLine + "\n",
+                                            myfont);
+                                    para.setAlignment(Element.ALIGN_JUSTIFIED);
+                                    document.add(para);
+                                }
+                            } else {
+                                System.out.println("no such file exists!");
+                            }
+                            // if(filecount <size)
+                            // {
+                            filecount = filecount + 1;
+                            convertintopdf();
+                            // convert(Files.get(index),outputFile,pdfWriter);
+                            // }
+                        } catch (Exception e) {
+                            errorflag = true;
+                            // if(filecount <size)
+                            // {
+                            filecount = filecount + 1;
+                            convertintopdf();
+                            // convert(Files.get(index),outputFile,pdfWriter);
+                            // }
+                            System.out.println("Exception: " + e.getMessage());
+                        } finally {
+                            try {
+                                br.close();
+                                fis.close();
+                                in.close();
+                                isr.close();
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                            }
+                        }
+                    }  else {
+                        if (checkConnection()) {
+                            isConnected = false;
+                            // You are connected, do something online.
+//                            docxflag = true;
+                            Uploadfile(sourceFile, "", fin.toString());
+                            // UploadFileService upload = new
+                            // UploadFileService(sourceFile,"",fin.toString());
+                            // upload.execute();
+
+                        } else {
+
+                            // Not connected.
+                            //
+                            isConnected = true;
+                            // errorflag = true;
+                            // if(filecount <size)
+                            // {
+                            filecount = filecount + 1;
+                            convertintopdf();
+                            // convert(Files.get(index),outputFile,pdfWriter);
+                            // }
+
+                        }
+                    }
+                } else if (sourceFile.endsWith(".jpg")
+                        || sourceFile.endsWith(".JPG")) {
+                    if(bytes <= 5000000) {
+                        try {
+                            writeflag = true;
+                            // System.out.println("Inside JPG");
+                            pdfWriter.setPageEvent(new HeaderAndFooter());
+                            System.out.println("JPG NAME" + sourceFile);
+                            com.itextpdf.text.Image image = com.itextpdf.text.Image
+                                    .getInstance(sourceFile);
+                            // image.scalePercent(20f);
+                            float scaleX = document.getPageSize().getWidth()
+                                    - document.leftMargin()
+                                    - document.rightMargin();
+                            float scaleY = document.getPageSize().getHeight()
+                                    - document.topMargin()
+                                    - document.bottomMargin();
+                            // System.out.println("getAbsoluteX :: " +
+                            // image.getWidth() + " :: getAbsoluteY :: " +
+                            // image.getHeight());
+                            if (scaleX > image.getWidth()) {
+                                scaleX = image.getWidth();
+                            }
+                            if (scaleY > image.getHeight()) {
+                                scaleY = image.getHeight();
+                            }
+                            image.scaleToFit(scaleX, scaleY);
+                            // ;
+                            document.add(image);
+                            // if(filecount <size)
+                            // {
+                            filecount = filecount + 1;
+                            convertintopdf();
+                            // convert(Files.get(index),outputFile,pdfWriter);
+                            // }
+                        } catch (Exception e) {
+                            errorflag = true;
+                            // if(filecount <size)
+                            // {
+                            filecount = filecount + 1;
+                            convertintopdf();
+                            // convert(Files.get(index),outputFile,pdfWriter);
+                            // }
+                            e.printStackTrace();
+                        }
+                    } else{
+                        if (checkConnection()) {
+                            isConnected = false;
+                            // You are connected, do something online.
+//                            docxflag = true;
+                            Uploadfile(sourceFile, "", fin.toString());
+                            // UploadFileService upload = new
+                            // UploadFileService(sourceFile,"",fin.toString());
+                            // upload.execute();
+
+                        } else {
+
+                            // Not connected.
+                            //
+                            isConnected = true;
+                            // errorflag = true;
+                            // if(filecount <size)
+                            // {
+                            filecount = filecount + 1;
+                            convertintopdf();
+                            // convert(Files.get(index),outputFile,pdfWriter);
+                            // }
+
+                        }
+                    }
+                } else if (sourceFile.endsWith(".gif")
+                        || sourceFile.endsWith(".png")
+                        || sourceFile.endsWith(".GIF")
+                        || sourceFile.endsWith(".PNG")) {
+                    if(bytes <= 5000000) {
+                        try {
+                            writeflag = true;
+                            Image gifImage = Image.getInstance(sourceFile);
+                            pdfWriter.setPageEvent(new HeaderAndFooter());
+                            // gifImage.scalePercent(50f);
+                            float scaleX = document.getPageSize().getWidth()
+                                    - document.leftMargin()
+                                    - document.rightMargin();
+                            float scaleY = document.getPageSize().getHeight()
+                                    - document.topMargin()
+                                    - document.bottomMargin();
+                            // System.out.println("getAbsoluteX :: " +
+                            // gifImage.getWidth() + " :: getAbsoluteY :: " +
+                            // gifImage.getHeight());
+                            if (scaleX > gifImage.getWidth()) {
+                                scaleX = gifImage.getWidth();
+                            }
+                            if (scaleY > gifImage.getHeight()) {
+                                scaleY = gifImage.getHeight();
+                            }
+                            gifImage.scaleToFit(scaleX, scaleY);
+                            document.add(gifImage);
+                            // if(filecount <size)
+                            // {
+                            filecount = filecount + 1;
+                            convertintopdf();
+                            // convert(Files.get(index),outputFile,pdfWriter);
+                            // }
+                        } catch (Exception e) {
+                            errorflag = true;
+                            // if(filecount <size)
+                            // {
+                            filecount = filecount + 1;
+                            convertintopdf();
+                            // convert(Files.get(index),outputFile,pdfWriter);
+                            // }
+                            e.printStackTrace();
+                        }
+                    } else {
+                        if (checkConnection()) {
+                            isConnected = false;
+                            // You are connected, do something online.
+//                            docxflag = true;
+                            Uploadfile(sourceFile, "", fin.toString());
+                            // UploadFileService upload = new
+                            // UploadFileService(sourceFile,"",fin.toString());
+                            // upload.execute();
+
+                        } else {
+
+                            // Not connected.
+                            //
+                            isConnected = true;
+                            // errorflag = true;
+                            // if(filecount <size)
+                            // {
+                            filecount = filecount + 1;
+                            convertintopdf();
+                            // convert(Files.get(index),outputFile,pdfWriter);
+                            // }
+
+                        }
+                    }
+                } else if (sourceFile.endsWith(".bmp")
+                        || sourceFile.endsWith(".BMP")) {
+                    if(bytes <= 5000000) {
+                        try {
+                            writeflag = true;
+                            Image convertBmp = BmpImage.getImage(sourceFile);
+                            pdfWriter.setPageEvent(new HeaderAndFooter());
+                            // convertBmp.scalePercent(50f);
+                            float scaleX = document.getPageSize().getWidth()
+                                    - document.leftMargin()
+                                    - document.rightMargin();
+                            float scaleY = document.getPageSize().getHeight()
+                                    - document.topMargin()
+                                    - document.bottomMargin();
+                            // System.out.println("getAbsoluteX :: " +
+                            // image.getWidth() + " :: getAbsoluteY :: " +
+                            // image.getHeight());
+                            if (scaleX > convertBmp.getWidth()) {
+                                scaleX = convertBmp.getWidth();
+                            }
+                            if (scaleY > convertBmp.getHeight()) {
+                                scaleY = convertBmp.getHeight();
+                            }
+                            convertBmp.scaleToFit(scaleX, scaleY);
+                            document.add(convertBmp);
+                            // System.out.println("Successfully Converted BMP to PDF in iText");
+                            // if(filecount <size)
+                            // {
+                            filecount = filecount + 1;
+                            convertintopdf();
+                            // convert(Files.get(index),outputFile,pdfWriter);
+                            // }
+                        } catch (Exception e) {
+                            errorflag = true;
+                            // if(filecount <size)
+                            // {
+                            filecount = filecount + 1;
+                            convertintopdf();
+                            // convert(Files.get(index),outputFile,pdfWriter);
+                            // }
+                            // TODO Auto-generated catch block
+                            e.printStackTrace();
+                        }
+                    } else{
+                        if (checkConnection()) {
+                            isConnected = false;
+                            // You are connected, do something online.
+//                            docxflag = true;
+                            Uploadfile(sourceFile, "", fin.toString());
+                            // UploadFileService upload = new
+                            // UploadFileService(sourceFile,"",fin.toString());
+                            // upload.execute();
+
+                        } else {
+
+                            // Not connected.
+                            //
+                            isConnected = true;
+                            // errorflag = true;
+                            // if(filecount <size)
+                            // {
+                            filecount = filecount + 1;
+                            convertintopdf();
+                            // convert(Files.get(index),outputFile,pdfWriter);
+                            // }
+
+                        }
+                    }
+                } else if (sourceFile.endsWith(".tiff")
+                        || sourceFile.endsWith(".TIFF")
+                        || sourceFile.endsWith(".tif")
+                        || sourceFile.endsWith(".TIF")) {
+                    if(bytes <= 5000000) {
+                        try {
+                            writeflag = true;
+                            Image tiff = Image.getInstance(sourceFile);
+                            pdfWriter.setPageEvent(new HeaderAndFooter());
+                            // tiff.scalePercent(50f);
+                            float scaleX = document.getPageSize().getWidth()
+                                    - document.leftMargin()
+                                    - document.rightMargin();
+                            float scaleY = document.getPageSize().getHeight()
+                                    - document.topMargin()
+                                    - document.bottomMargin();
+                            // System.out.println("getAbsoluteX :: " +
+                            // image.getWidth() + " :: getAbsoluteY :: " +
+                            // image.getHeight());
+                            if (scaleX > tiff.getWidth()) {
+                                scaleX = tiff.getWidth();
+                            }
+                            if (scaleY > tiff.getHeight()) {
+                                scaleY = tiff.getHeight();
+                            }
+                            tiff.scaleToFit(scaleX, scaleY);
+                            document.add(tiff);
+                            document.add(tiff);
+                            // if(filecount <size)
+                            // {
+                            filecount = filecount + 1;
+                            convertintopdf();
+                            // convert(Files.get(index),outputFile,pdfWriter);
+                            // }
+                        } catch (Exception e) {
+                            errorflag = true;
+                            // if(filecount <size)
+                            // {
+                            filecount = filecount + 1;
+                            convertintopdf();
+                            // convert(Files.get(index),outputFile,pdfWriter);
+                            // }
+                            // TODO Auto-generated catch block
+                            e.printStackTrace();
+                        }
+                    } else {
+                        if (checkConnection()) {
+                            isConnected = false;
+                            // You are connected, do something online.
+//                            docxflag = true;
+                            Uploadfile(sourceFile, "", fin.toString());
+                            // UploadFileService upload = new
+                            // UploadFileService(sourceFile,"",fin.toString());
+                            // upload.execute();
+
+                        } else {
+
+                            // Not connected.
+                            //
+                            isConnected = true;
+                            // errorflag = true;
+                            // if(filecount <size)
+                            // {
+                            filecount = filecount + 1;
+                            convertintopdf();
+                            // convert(Files.get(index),outputFile,pdfWriter);
+                            // }
+
+                        }
+                    }
+                } else if (sourceFile.endsWith(".pdf")) {
+                    // we are adding all pdf files to a array and
+                    // merge it after conversion of other pdf files are done
+                    // writeflag variable is for merging pdfs
+                    try {
+                        pdfflag = true;
+                        pdffiles.add(sourceFile);
+                        // if(filecount <size)
+                        // {
+                        filecount = filecount + 1;
+                        convertintopdf();
+                        // convert(Files.get(index),outputFile,pdfWriter);
+                        // }
+                    } catch (Exception e) {
+                        errorflag = true;
+                        // if(filecount <size)
+                        // {
+                        filecount = filecount + 1;
+                        convertintopdf();
+                        // convert(Files.get(index),outputFile,pdfWriter);
+                        // }
+                        e.printStackTrace();
+                    } finally {
+                        System.out.println("its done");
+                    }
+                } else {
+                    // if file is of format that is not supported
+                    txtSourceFile.setText("");
+                    // txtDestinationFile.setText("");
+
+                    txtSourceFile.setVisibility(View.GONE);
+                    // txtDestinationFile.setVisibility(View.GONE);
+
+                    alertDialogBuilder
+                            .setMessage("Only .doc, .docx, .odt, .xlsx, .xls, .pdf, .txt, .csv, .jpg, .png, .gif, .tiff, .bmp files can be converted.");
+
+                    alertDialogBuilder.setPositiveButton("OK",
+                            new DialogInterface.OnClickListener() {
+                                @Override
+                                public void onClick(DialogInterface dialog,
+                                                    int id) {
+                                    dialog.cancel();
+
+                                }
+                            });
+                    alertDialogBuilder.show();
+
+                }
+            }
+
+        }
+    }
+
+    public void Uploadfile(String posturl, String filename, String filePath) {
+        try {
+            // imgPath = filePath;
+
+            // System.out.println("################################ 1");
+
+            String fileNameSegments[] = filePath.split("/");
+
+            fileName = fileNameSegments[fileNameSegments.length - 1];
+            String UP_URL = UPLOAD_URL + UPLOAD_SERVLET;
+            if (httpClient == null) {
+                httpClient = new DefaultHttpClient();
+                httpPost = new HttpPost(UP_URL);
+            }
+            // System.out.println("################################ 2");
+            // post header
+
+            // HttpPost httpPost = new
+            // HttpPost("http://10.100.112.83:8084/FileUpload/ImageUploadServlet");
+
+            File file = new File(filePath);
+
+            // String filetype="Image";
+            // StringBody stringBody2=null;
+            // if(uploadcount > 0)
+            // {
+            // stringBody2 = new StringBody("created",
+            // ContentType.MULTIPART_FORM_DATA);
+            // }
+            // else
+            // {
+            // stringBody2 = new StringBody("notcreated",
+            // ContentType.MULTIPART_FORM_DATA);
+            // }
+
+            final StringBody stringBody1 = new StringBody("This is message 1",
+                    ContentType.MULTIPART_FORM_DATA);
+            final StringBody stringBody = new StringBody(fileName,
+                    ContentType.MULTIPART_FORM_DATA);
+            final StringBody stringBody2 = new StringBody(file.length() + "",
+                    ContentType.MULTIPART_FORM_DATA);
+            // final StringBody stringBody3 = new StringBody(alreadypdf,
+            // ContentType.MULTIPART_FORM_DATA);
+
+            FileBody fileBody = new FileBody(file);
+            // System.out.println("################################ 3");
+            MultipartEntityBuilder builder = MultipartEntityBuilder.create();
+            builder.setMode(HttpMultipartMode.BROWSER_COMPATIBLE);
+            builder.addPart("text1", stringBody1);
+            builder.addPart("filename", stringBody);
+            builder.addPart("fileSize", stringBody2);
+            builder.addPart("file", fileBody);
+
+            // System.out.println("################################ 4");
+            final HttpEntity entity = builder.build();
+            httpPost.setEntity(entity);
+            HttpResponse response = null;
+            final HttpResponse response1;
+            try {
+                // System.out.println("################################ 5");
+                response = httpClient.execute(httpPost);
+                response1 = response;
+                int statuscode = response.getStatusLine().getStatusCode();
+                // System.out.println("################################ 6");
+                if (statuscode == 200) {
+                    alreadypdf = EntityUtils.toString(response1.getEntity());
+                    // System.out.println("alreadypdf :: alreadypdf :: " +
+                    // alreadypdf);
+                    // System.out.println("alreadypdf :: alreadypdf :: " +
+                    // alreadypdf.length());
+                    String[] res = alreadypdf.split(":");
+                    if (res.length > 1) {
+                        String fileName = res[1];
+
+                        String fileSize = res[0];
+                        if (fileName.trim().endsWith("pdf")) {
+                            // String[] res = alreadypdf.split(":");
+
+                            String DOWN_URL = UPLOAD_URL + DOWNLOAD_FOLDER
+                                    + fileName;
+                            // downloadFile(DOWN_URL);
+                            System.out.println("DOne::::");
+
+                            System.out.println("fileURL :: " + DOWN_URL);
+                            HttpGet hGet = new HttpGet(DOWN_URL.trim());
+                            response = httpClient.execute(hGet);
+                            InputStream is = response.getEntity().getContent();
+                            SimpleDateFormat sdf = new SimpleDateFormat(
+                                    "yyyy-MM-ddHH:mm:ss.SSS");
+                            String destinationFile = sdf.format(new Date())
+                                    .replaceAll("-", "").replaceAll(":", "")
+                                    .replaceAll("\\.", "")
+                                    + ".pdf";
+                            File outputFile = new File(getActivity().getCacheDir(),
+                                    destinationFile);
+
+                            FileOutputStream fos = new FileOutputStream(
+                                    outputFile);
+                            int read = 0;
+                            byte[] buffer = new byte[32768];
+                            while ((read = is.read(buffer)) > 0) {
+                                fos.write(buffer, 0, read);
+                            }
+                            fos.close();
+                            is.close();
+
+                            httpClient.getConnectionManager().shutdown();
+
+                            httpClient = null;
+                            httpPost = null;
+                            System.out.println("fileSize :: " + fileSize);
+                            System.out.println("outputFile :: "
+                                    + outputFile.length());
+                            if (fileSize.equals(outputFile.length() + "")) {
+                                pdffiles.add(outputFile.toString());
+                            } else {
+                                downloadflag = true;
+                            }
+                        } else {
+                            errorflag = true;
+                        }
+                    } else {
+                        uploadflag = true;
+                    }
+
+                    filecount = filecount + 1;
+                    convertintopdf();
+
+                } else {
+                    isConnected = true;
+                    filecount = filecount + 1;
+                    convertintopdf();
+                }
+
+            } catch (Exception e) {
+                e.printStackTrace();
+                isConnected = true;
+                filecount = filecount + 1;
+                convertintopdf();
+            } finally {
+                entity.consumeContent();
+                System.gc();
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            isConnected = true;
+            filecount = filecount + 1;
+            convertintopdf();
+        }
+    }
+
+
+    public boolean checkConnection() {
+        ConnectivityManager connec = (ConnectivityManager) getActivity().getSystemService(Context.CONNECTIVITY_SERVICE);
+        if (connec != null
+                && ((connec.getNetworkInfo(ConnectivityManager.TYPE_WIFI)
+                .getState() == android.net.NetworkInfo.State.CONNECTED) || (connec
+                .getNetworkInfo(ConnectivityManager.TYPE_MOBILE)
+                .getState() == android.net.NetworkInfo.State.CONNECTED))) {
+            return true;
+        } else if (connec != null
+                && ((connec.getNetworkInfo(ConnectivityManager.TYPE_WIFI)
+                .getState() == android.net.NetworkInfo.State.DISCONNECTED) || (connec
+                .getNetworkInfo(ConnectivityManager.TYPE_MOBILE)
+                .getState() == android.net.NetworkInfo.State.DISCONNECTED))) {
+
+            return false;
+        }
+        return false;
+
+    }
+
+    @Override
+    public void onResume() {
+        textviewTitle = (TextView) getActivity().findViewById(R.id.textviewTitle);
+        textviewTitle.setText("Home");
+        super.onResume();
+    }
+}
