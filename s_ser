@@ -1,0 +1,616 @@
+package com.samyak.servlet;
+
+import java.io.BufferedReader;
+import java.io.DataInputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.FileReader;
+import java.io.FilterInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.io.Reader;
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.Iterator;
+import java.util.List;
+
+import javax.servlet.ServletException;
+import javax.servlet.annotation.MultipartConfig;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import javax.servlet.http.Part;
+
+import org.apache.poi.hssf.usermodel.HSSFWorkbook;
+import org.apache.poi.hwpf.HWPFDocument;
+import org.apache.poi.hwpf.usermodel.Range;
+import org.apache.poi.hwpf.usermodel.Table;
+import org.apache.poi.openxml4j.opc.OPCPackage;
+import org.apache.poi.poifs.filesystem.POIFSFileSystem;
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.DateUtil;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xssf.usermodel.XSSFFont;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.apache.poi.xwpf.usermodel.XWPFDocument;
+
+import com.lowagie.text.Document;
+import com.lowagie.text.DocumentException;
+import com.lowagie.text.Element;
+import com.lowagie.text.FontFactory;
+import com.lowagie.text.Image;
+import com.lowagie.text.PageSize;
+import com.lowagie.text.Paragraph;
+import com.lowagie.text.Phrase;
+import com.lowagie.text.pdf.PdfPCell;
+import com.lowagie.text.pdf.PdfPTable;
+import com.lowagie.text.pdf.PdfWriter;
+import com.lowagie.text.pdf.codec.BmpImage;
+import com.opencsv.CSVReader;
+
+import fr.opensagres.poi.xwpf.converter.core.Options;
+import fr.opensagres.poi.xwpf.converter.pdf.PdfConverter;
+import fr.opensagres.poi.xwpf.converter.pdf.PdfOptions;
+
+@MultipartConfig(fileSizeThreshold = 10485760, maxFileSize = 52428800, maxRequestSize = 104857600)
+public class ImageUploadServlet extends HttpServlet {
+	/**
+	 * 
+	 */
+	private static final long serialVersionUID = 712408501675299728L;
+	public static Document document;
+	public static String outputFile;
+	public static final String UPLOAD_DIRECTORY = "DocUpload";
+	public static final int DELETE_FILE_DAYS = 1;
+
+	protected void processRequest(HttpServletRequest request, HttpServletResponse response)
+			throws ServletException, IOException {
+		response.setContentType("text/html;charset=UTF-8");
+		PrintWriter out = response.getWriter();
+		String filename = "";
+		try {
+			System.out.println("###filename#####" + request.getParameter("filename"));
+			String fullPath = request.getServletContext().getRealPath("");
+			String finalpath = "";
+			String fullPath1 = request.getServletContext().getContextPath();
+			System.out.println("fullPath :: fullPath :: " + fullPath);
+			this.log("fullPath : " + fullPath);
+			File uploadDir1 = new File(fullPath);
+			System.out.println("uploadDir1 :: uploadDir1 :: " + uploadDir1.toString());
+			System.out.println("uploadDir1 :: uploadDir1 :: " + uploadDir1.getParent());
+			this.log("uploadDir1 :: uploadDir1 :: " + uploadDir1.toString());
+			this.log("uploadDir1 :: uploadDir1 :: " + uploadDir1.getParent());
+			if (uploadDir1.toString().endsWith("FileUpload")) {
+				finalpath = uploadDir1.toString() + File.separator + "DocUpload";
+			} else {
+				File nfile = new File(uploadDir1.getParent());
+				finalpath = nfile.getParent() + File.separator + "DocUpload";
+			}
+			System.out.println("finalpath :: finalpath :: " + finalpath);
+			this.log("finalpath :: finalpath :: " + finalpath);
+			File configDir = new File(System.getProperty("catalina.base"), "DocUpload");
+			// QuartzJob.parentPath = finalpath;
+			String parentPath = finalpath;
+			String uploadfile = request.getParameter("filename");
+			String uploadfileSize = request.getParameter("fileSize");
+			System.out.println("Received file size :: " + uploadfileSize);
+			boolean fileCopied = false;
+			boolean dirCreated = true;
+			File parentDir = new File(parentPath);
+			if (!parentDir.exists() || !parentDir.isDirectory()) {
+				dirCreated = parentDir.mkdirs();
+			}
+			if (dirCreated) {
+				SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-ddHH:mm:ss.SSS");
+				String newfilename = sdf.format(new Date()).replaceAll("-", "").replaceAll(":", "").replaceAll("\\.",
+						"");
+				if (uploadfile != null) {
+					String ext = ImageUploadServlet.getFileExtension(new File(uploadfile));
+					System.out.println("File extension is: " + ext);
+					filename = parentPath + "/" + newfilename + "." + ext;
+					for (Part part : request.getParts()) {
+						part.write(filename);
+					}
+					File file = new File(filename);
+					System.out.println("Uploaded file size :: " + file.length());
+					String sizeAfterUpload = file.length() + "";
+					if (sizeAfterUpload.equals(uploadfileSize)) {
+						String pdffile = ImageUploadServlet.createPDF(new File(filename), parentPath, ext);
+						System.out.println("pdffile ::pdffile :: " + pdffile);
+						this.log("pdffile ::pdffile :: " + pdffile);
+						if (new File(filename).exists()) {
+							new File(filename).delete();
+						}
+						File temp = new File(parentPath + "/" + pdffile);
+						System.out.println("temp.length() :: " + temp.length());
+
+						out.println(temp.length() + ":" + pdffile);
+
+						// out.println("File not uploaded to server");
+
+					} else {
+						this.log("File is not properly uploaded to server :: original size :: " + uploadfileSize
+								+ " :: uploaded Size  :: " + sizeAfterUpload);
+						out.println("File not uploaded to server");
+					}
+					out.close();
+					out.flush();
+				}
+			}
+		} catch (Exception ex) {
+			ex.printStackTrace();
+		}
+	}
+
+	private static String getFileExtension(File file) {
+		String fileName = file.getName();
+		if (fileName.lastIndexOf(".") != -1 && fileName.lastIndexOf(".") != 0) {
+			return fileName.substring(fileName.lastIndexOf(".") + 1);
+		}
+		return "";
+	}
+
+	public static void deleteFilesOlderThanNdays(int daysBack, String dirWay) {
+		try {
+			System.out.println("dirWay : :dirWay : :" + dirWay);
+			File directory = new File(dirWay);
+			if (directory.exists()) {
+				File[] listFiles = directory.listFiles();
+				long purgeTime = System.currentTimeMillis() - (long) (daysBack * 6 * 60 * 60 * 1000);
+				for (File listFile : listFiles) {
+					if (listFile.lastModified() >= purgeTime || listFile.delete())
+						continue;
+					System.err.println("Unable to delete file: " + listFile);
+				}
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
+
+	private static String createPDF(File file, String parentPath, String ext) {
+		try {
+			block54: {
+				long start = System.currentTimeMillis();
+				document = new Document(PageSize.A4, 36.0f, 72.0f, 108.0f, 180.0f);
+				if (file.toString().endsWith(".doc")) {
+					boolean isTableAdded = false;
+					try {
+						FileInputStream fis = new FileInputStream(file);
+						POIFSFileSystem fs = new POIFSFileSystem((InputStream) fis);
+						HWPFDocument doc = new HWPFDocument(fs);
+						document.open();
+						outputFile = new SimpleDateFormat("yyyyMMddhhmmss'.pdf'").format(new Date());
+						String outputFile1 = parentPath + "/" + outputFile;
+						PdfWriter pdfWriter = PdfWriter.getInstance((Document) document,
+								(OutputStream) new FileOutputStream(outputFile1));
+						Range range = doc.getRange();
+						int firstIndexOfTableParagraph = 0;
+						for (int check = 0; check < range.numParagraphs(); ++check) {
+							if (!range.getParagraph(check).isInTable())
+								continue;
+							firstIndexOfTableParagraph = check;
+							break;
+						}
+						org.apache.poi.hwpf.usermodel.Paragraph tablePar = range
+								.getParagraph(firstIndexOfTableParagraph);
+						Table table = range.getTable(tablePar);
+						PdfPTable tableInPDF = new PdfPTable(table.getRow(0).numCells());
+						int j = 0;
+						for (int i = 0; i < range.numParagraphs(); ++i) {
+							org.apache.poi.hwpf.usermodel.Paragraph par = range.getParagraph(i);
+							// System.out.println("TYPE IS :: " + par.type());
+							if (par.isInTable()) {
+								String temp = par.text().toString();
+								tableInPDF.addCell(par.text().toString());
+								isTableAdded = true;
+								++j;
+								continue;
+							}
+							if (isTableAdded) {
+								document.open();
+								document.add((Element) tableInPDF);
+								isTableAdded = false;
+							}
+							document.add((Element) new Paragraph(par.text().toString()));
+						}
+						document.close();
+						pdfWriter.close();
+					} catch (Exception e) {
+						outputFile = "";
+						e.printStackTrace();
+					}
+				} else if (file.toString().endsWith("docx")) {
+					try {
+						SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-ddHH:mm:ss.SSS");
+						outputFile = sdf.format(new Date()).replaceAll("-", "").replaceAll(":", "").replaceAll("\\.",
+								"") + ".pdf";
+						String outputFile1 = parentPath + "/" + outputFile;
+						FileInputStream is = new FileInputStream(file);
+						XWPFDocument xdoc = new XWPFDocument((InputStream) is);
+						PdfOptions options = PdfOptions.create();
+						FileOutputStream out = new FileOutputStream(outputFile1);
+						PdfConverter.getInstance().convert(xdoc, (OutputStream) out, (PdfOptions) (Options) options);
+						System.err.println(
+								"Generate pdf/HelloWorld.pdf with " + (System.currentTimeMillis() - start) + "ms");
+					} catch (Exception e) {
+						outputFile = "";
+					}
+				} else if (file.toString().endsWith("xls") || file.toString().endsWith("xlsx")) {
+					try {
+						SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-ddHH:mm:ss.SSS");
+						outputFile = sdf.format(new Date()).replaceAll("-", "").replaceAll(":", "").replaceAll("\\.",
+								"") + ".pdf";
+						String outputFile1 = parentPath + "/" + outputFile;
+						Workbook workbook = ImageUploadServlet.loadSpreadSheet(file);
+						ImageUploadServlet.readSpreadSheet(workbook, outputFile1);
+					} catch (FileNotFoundException e) {
+						System.err.println("Excel File (or) PDF File is already opened. Please close the file");
+					} catch (Exception e) {
+						e.printStackTrace();
+						outputFile = "";
+					}
+				} else if (file.toString().endsWith(".csv")) {
+					CSVReader reader = null;
+					try {
+						outputFile = new SimpleDateFormat("yyyyMMddhhmmss'.pdf'").format(new Date());
+						String outputFile1 = parentPath + "/" + outputFile;
+						System.out.println("Inside CSV File" + file.toString());
+						reader = new CSVReader((Reader) new FileReader(file.toString()));
+						PdfWriter pdfWriter = PdfWriter.getInstance((Document) document,
+								(OutputStream) new FileOutputStream(outputFile1));
+						document.open();
+						List<String[]> entryList = reader.readAll();
+						PdfPTable csvTable = new PdfPTable(((String[]) entryList.get(0)).length);
+						for (int i = 0; i < entryList.size(); ++i) {
+							String[] strings = (String[]) entryList.get(i);
+							for (int j = 0; j < strings.length; ++j) {
+								System.out.println("Strings" + strings.length);
+								PdfPCell cell = new PdfPCell(new Phrase(strings[j]));
+								csvTable.addCell(cell);
+							}
+						}
+						document.add((Element) csvTable);
+					} catch (Exception e) {
+						e.printStackTrace();
+						outputFile = "";
+					}
+				} else {
+					if (file.toString().endsWith(".txt")) {
+						FileInputStream fis = null;
+						FilterInputStream in = null;
+						InputStreamReader isr = null;
+						BufferedReader br = null;
+						try {
+							outputFile = new SimpleDateFormat("yyyyMMddhhmmss'.pdf'").format(new Date());
+							String outputFile1 = parentPath + "/" + outputFile;
+							PdfWriter writer = PdfWriter.getInstance((Document) document,
+									(OutputStream) new FileOutputStream(outputFile1));
+							document.open();
+							com.lowagie.text.Font myfont = new com.lowagie.text.Font();
+							com.lowagie.text.Font bold_font = new com.lowagie.text.Font();
+							bold_font.setStyle(1);
+							bold_font.setSize(10.0f);
+							myfont.setStyle(0);
+							myfont.setSize(10.0f);
+							document.add((Element) new Paragraph("\n"));
+							if (file.exists()) {
+								String strLine;
+								fis = new FileInputStream(file);
+								in = new DataInputStream(fis);
+								isr = new InputStreamReader(in);
+								br = new BufferedReader(isr);
+								while ((strLine = br.readLine()) != null) {
+									Paragraph para = new Paragraph(strLine + "\n", myfont);
+									para.setAlignment(3);
+									document.add((Element) para);
+								}
+								break block54;
+							}
+							System.out.println("no such file exists!");
+						} catch (Exception e) {
+							System.out.println("Exception: " + e.getMessage());
+							outputFile = "";
+						} finally {
+							try {
+								br.close();
+								fis.close();
+								in.close();
+								isr.close();
+							} catch (Exception e) {
+								e.printStackTrace();
+							}
+						}
+					}
+					if (file.toString().endsWith(".jpg") || file.toString().endsWith(".JPG")) {
+						try {
+							outputFile = new SimpleDateFormat("yyyyMMddhhmmss'.pdf'").format(new Date());
+							String outputFile1 = parentPath + "/" + outputFile;
+							PdfWriter pdfWriter = PdfWriter.getInstance((Document) document,
+									(OutputStream) new FileOutputStream(outputFile1));
+							document.open();
+							Image image = Image.getInstance((String) file.toString());
+							image.scalePercent(20.0f);
+							document.add((Element) image);
+							document.close();
+						} catch (Exception e) {
+							e.printStackTrace();
+							outputFile = "";
+						}
+					} else if (file.toString().endsWith(".gif") || file.toString().endsWith(".png")
+							|| file.toString().endsWith(".GIF") || file.toString().endsWith(".PNG")) {
+						try {
+							outputFile = new SimpleDateFormat("yyyyMMddhhmmss'.pdf'").format(new Date());
+							String outputFile1 = parentPath + "/" + outputFile;
+							PdfWriter writer = PdfWriter.getInstance((Document) document,
+									(OutputStream) new FileOutputStream(outputFile1));
+							document.open();
+							Image gifImage = Image.getInstance((String) file.toString());
+							gifImage.scalePercent(20.0f);
+							document.add((Element) gifImage);
+							document.close();
+						} catch (Exception e) {
+							e.printStackTrace();
+							outputFile = "";
+						}
+					} else if (file.toString().endsWith(".bmp") || file.toString().endsWith(".BMP")) {
+						try {
+							outputFile = new SimpleDateFormat("yyyyMMddhhmmss'.bmp'").format(new Date());
+							String outputFile1 = parentPath + "/" + outputFile;
+							PdfWriter.getInstance((Document) document,
+									(OutputStream) new FileOutputStream(outputFile1));
+							document.open();
+							Image convertBmp = BmpImage.getImage((String) file.toString());
+							convertBmp.scalePercent(20.0f);
+							document.add((Element) convertBmp);
+						} catch (Exception e) {
+							e.printStackTrace();
+							outputFile = "";
+						}
+					} else if (file.toString().endsWith(".tiff") || file.toString().endsWith(".TIFF")
+							|| file.toString().endsWith(".tif") || file.toString().endsWith(".TIF")) {
+						try {
+							outputFile = new SimpleDateFormat("yyyyMMddhhmmss'.pdf'").format(new Date());
+							String outputFile1 = parentPath + "/" + outputFile;
+							PdfWriter.getInstance((Document) document,
+									(OutputStream) new FileOutputStream(outputFile1));
+							document.open();
+							Image tiff = Image.getInstance((String) file.toString());
+							tiff.scalePercent(20.0f);
+							document.add((Element) tiff);
+							document.close();
+						} catch (Exception e) {
+							e.printStackTrace();
+							outputFile = "";
+						}
+					}
+				}
+			}
+			return outputFile;
+		} catch (Exception e) {
+			e.printStackTrace();
+			return "";
+		}
+	}
+
+	private static Workbook loadSpreadSheet(File xlsFile) throws Exception {
+		XSSFWorkbook workbook = null;
+		String ext = ImageUploadServlet.getFileExtension(xlsFile.getName());
+		if (ext.equalsIgnoreCase("xlsx")) {
+			OPCPackage pkg = OPCPackage.open((String) xlsFile.getAbsolutePath());
+			workbook = new XSSFWorkbook(pkg);
+			pkg.close();
+		} else if (ext.equalsIgnoreCase("xls")) {
+			// FileInputStream xlsFIS = new FileInputStream(xlsFile);
+			//// workbook = new HSSFWorkbook((InputStream)xlsFIS);
+			// xlsFIS.close();
+		} else {
+			throw new Exception("FILE EXTENSION NOT RECOGNIZED");
+		}
+		return workbook;
+	}
+
+	private static String getFileExtension(String fileName) {
+		String ext = "";
+		int mid = fileName.lastIndexOf(".");
+		ext = fileName.substring(mid + 1, fileName.length());
+		System.out.println("File Extension --" + ext);
+		return ext;
+	}
+
+	private static void readSpreadSheet(Workbook workbook, String outputFile1) throws IOException, DocumentException {
+		int numberOfColumns = 0;
+		Document document = new Document(PageSize.A4, 36.0f, 72.0f, 108.0f, 180.0f);
+		PdfWriter.getInstance((Document) document, (OutputStream) new FileOutputStream(outputFile1));
+		document.open();
+		Sheet sheet = workbook.getSheetAt(0);
+		Iterator<Row> rowIterator = sheet.iterator();
+		boolean temp = false;
+		boolean flag = true;
+		PdfPTable table = null;
+		while (rowIterator.hasNext()) {
+			Row row = (Row) rowIterator.next();
+			int cellNumber = 0;
+			if (flag) {
+				table = new PdfPTable((int) row.getLastCellNum());
+				flag = false;
+			}
+			Iterator<Cell> cellIterator = row.cellIterator();
+			while (cellIterator.hasNext()) {
+				Cell cell = (Cell) cellIterator.next();
+				switch (cell.getCellType()) {
+				case 1: {
+					if (!temp) {
+						int fontStyle;
+						boolean boldWeight;
+						XSSFFont font;
+						com.lowagie.text.Font cellFont = null;
+						if (workbook instanceof HSSFWorkbook) {
+							// font =
+							// (HSSFFont)workbook.getFontAt(cell.getCellStyle().getFontIndex());
+							// boldWeight = font.getBoldweight();
+							// fontStyle = 0;
+							// if (boldWeight == 700) {
+							// fontStyle = 1;
+							// }
+							// cellFont =
+							// FontFactory.getFont((String)font.getFontName(),
+							// (float)12.0f, (int)fontStyle);
+						} else if (workbook instanceof XSSFWorkbook) {
+							font = (XSSFFont) workbook.getFontAt(cell.getCellStyle().getFontIndex());
+							boldWeight = font.getBold();
+							fontStyle = 0;
+							if (boldWeight) {
+								fontStyle = 1;
+							}
+							cellFont = FontFactory.getFont((String) font.getFontName(), (float) 12.0f, (int) fontStyle);
+						}
+						numberOfColumns = row.getLastCellNum();
+						PdfPCell c1 = new PdfPCell(new Phrase(cell.getStringCellValue(), cellFont));
+						c1.setHorizontalAlignment(1);
+						table.addCell(c1);
+					} else {
+						cellNumber = ImageUploadServlet.checkEmptyCellAndAddCellContentToPDFTable(cellNumber, cell,
+								table, workbook);
+					}
+					++cellNumber;
+					break;
+				}
+				case 0: {
+					cellNumber = ImageUploadServlet.checkEmptyCellAndAddCellContentToPDFTable(cellNumber, cell, table,
+							workbook);
+					++cellNumber;
+					break;
+				}
+				case 4: {
+					cellNumber = ImageUploadServlet.checkEmptyCellAndAddCellContentToPDFTable(cellNumber, cell, table,
+							workbook);
+					++cellNumber;
+				}
+				}
+			}
+			temp = true;
+			if (numberOfColumns == cellNumber)
+				continue;
+			for (int i = 0; i < numberOfColumns - cellNumber; ++i) {
+				table.addCell(" ");
+			}
+		}
+		document.add((Element) table);
+		document.close();
+	}
+
+	private static void addEmptyLine(Paragraph paragraph, int number) {
+		for (int i = 0; i < number; ++i) {
+			paragraph.add((Object) new Paragraph(" "));
+		}
+	}
+
+	private static int checkEmptyCellAndAddCellContentToPDFTable(int cellNumber, Cell cell, PdfPTable table,
+			Workbook workbook) {
+		boolean boldWeight;
+		Calendar date;
+		int fontStyle;
+		XSSFFont font;
+		PdfPCell table_cell = null;
+		com.lowagie.text.Font cellFont = null;
+		if (workbook instanceof HSSFWorkbook) {
+			// font =
+			// (HSSFFont)workbook.getFontAt(cell.getCellStyle().getFontIndex());
+			// boldWeight = font.getBoldweight();
+			// fontStyle = 0;
+			// if (boldWeight == 700) {
+			// fontStyle = 1;
+			// }
+			// cellFont = FontFactory.getFont((String)font.getFontName(),
+			// (float)12.0f, (int)fontStyle);
+		} else if (workbook instanceof XSSFWorkbook) {
+			font = (XSSFFont) workbook.getFontAt(cell.getCellStyle().getFontIndex());
+			boldWeight = font.getBold();
+			fontStyle = 0;
+			if (boldWeight) {
+				fontStyle = 1;
+			}
+			cellFont = FontFactory.getFont((String) font.getFontName(), (float) 12.0f, (int) fontStyle);
+		}
+		if (cellNumber == cell.getColumnIndex()) {
+			if (cell.getCellType() == 0) {
+				if (DateUtil.isCellDateFormatted((Cell) cell)) {
+					Calendar cal = date = Calendar.getInstance();
+					cal.set(12, date.get(12));
+					cal.set(13, date.get(13));
+					cal.set(14, date.get(14));
+					SimpleDateFormat sdf = new SimpleDateFormat("MM/dd/yyyy");
+					String cell1 = sdf.format(cell.getDateCellValue());
+					table.addCell(cell1);
+				} else {
+					table_cell = new PdfPCell(new Phrase(String.valueOf((int) cell.getNumericCellValue()), cellFont));
+					table.addCell(table_cell);
+				}
+			} else if (cell.getCellType() == 1) {
+				table_cell = new PdfPCell(new Phrase(cell.getStringCellValue(), cellFont));
+				table.addCell(table_cell);
+			} else if (cell.getCellType() == 4) {
+				table_cell = new PdfPCell(new Phrase(String.valueOf(cell.getBooleanCellValue()), cellFont));
+				table.addCell(table_cell);
+			}
+		} else {
+			while (cellNumber < cell.getColumnIndex()) {
+				table.addCell(" ");
+				++cellNumber;
+			}
+			if (cellNumber == cell.getColumnIndex()) {
+				if (cell.getCellType() == 0) {
+					if (DateUtil.isCellDateFormatted((Cell) cell)) {
+						Calendar cal = date = Calendar.getInstance();
+						cal.set(12, date.get(12));
+						cal.set(13, date.get(13));
+						cal.set(14, date.get(14));
+						SimpleDateFormat sdf = new SimpleDateFormat("MM/dd/yyyy");
+						String cell1 = sdf.format(cell.getDateCellValue());
+						System.out.println("cell1" + cell1);
+						table.addCell(cell1);
+					} else {
+						table_cell = new PdfPCell(
+								new Phrase(String.valueOf((int) cell.getNumericCellValue()), cellFont));
+						table.addCell(table_cell);
+					}
+				} else if (cell.getCellType() == 1) {
+					table_cell = new PdfPCell(new Phrase(cell.getStringCellValue(), cellFont));
+					table.addCell(table_cell);
+				} else if (cell.getCellType() == 4) {
+					table_cell = new PdfPCell(new Phrase(String.valueOf(cell.getBooleanCellValue()), cellFont));
+					table.addCell(table_cell);
+				}
+			}
+			cellNumber = cell.getColumnIndex();
+		}
+		return cellNumber;
+	}
+
+	protected void doGet(HttpServletRequest request, HttpServletResponse response)
+			throws ServletException, IOException {
+		this.processRequest(request, response);
+	}
+
+	protected void doPost(HttpServletRequest request, HttpServletResponse response)
+			throws ServletException, IOException {
+		this.processRequest(request, response);
+	}
+
+	public String getServletInfo() {
+		return "Short description";
+	}
+
+	static {
+		outputFile = "";
+	}
+}
