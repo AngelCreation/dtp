@@ -6,29 +6,46 @@
 
 package com.samyak.servlet;
 
+import java.io.File;
+
 /**
  *
  * @author admin
  */
-import static com.samyak.servlet.ImageUploadServlet.deleteFilesOlderThanNdays;
-
 import org.quartz.Job;
 import org.quartz.JobExecutionContext;
 import org.quartz.JobExecutionException;
 
 public class QuartzJob implements Job {
 	private static final int DELETE_FILE_DAYS = 1;
-	public static String parentPath = "";
 	String finalpath = "";
 
 	@Override
 	public void execute(JobExecutionContext context) throws JobExecutionException {
-		deleteFilesOlderThanNdays(DELETE_FILE_DAYS, parentPath);
+		try {
+
+			File directory = new File(
+					System.getProperty("catalina.base") + File.separator + "wtpwebapps/FileUpload/DocUpload");
+			// System.out.println("dirWay : :dirWay : :" +
+			// directory.getAbsolutePath());
+			if (directory.exists()) {
+				File[] listFiles = directory.listFiles();
+				long purgeTime = System.currentTimeMillis() - (long) (DELETE_FILE_DAYS * 6 * 60 * 60 * 1000);
+				for (File listFile : listFiles) {
+
+					if (listFile.lastModified() <= purgeTime) {
+						listFile.delete();
+					}
+					// System.out.println("Unable to delete file: " + listFile);
+
+				}
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
 		System.out.println("Deleteing files..");
 	}
 }
-
-
 
 
 
@@ -64,7 +81,7 @@ public class QuartzListener implements ServletContextListener {
 
 	@Override
 	public void contextInitialized(ServletContextEvent servletContext) {
-		System.out.println("Context Initialized");
+		// System.out.println("Context Initialized");
 
 		try {
 			// .withSchedule(CronScheduleBuilder.cronSchedule("0/5 * * * * ?"))
@@ -72,7 +89,7 @@ public class QuartzListener implements ServletContextListener {
 			JobDetail job = newJob(QuartzJob.class).withIdentity("CronQuartzJob", "Group").build();
 
 			Trigger trigger = TriggerBuilder.newTrigger().withIdentity("TriggerName", "Group")
-					.withSchedule(SimpleScheduleBuilder.simpleSchedule().withIntervalInMinutes(2).repeatForever())
+					.withSchedule(SimpleScheduleBuilder.simpleSchedule().withIntervalInMinutes(180).repeatForever())
 					.build();
 
 			// Create a Trigger that fires every 5 minutes.
@@ -92,7 +109,7 @@ public class QuartzListener implements ServletContextListener {
 
 	@Override
 	public void contextDestroyed(ServletContextEvent servletContext) {
-		System.out.println("Context Destroyed");
+		// System.out.println("Context Destroyed");
 		try {
 			scheduler.shutdown();
 		} catch (SchedulerException e) {
@@ -101,3 +118,4 @@ public class QuartzListener implements ServletContextListener {
 	}
 
 }
+
