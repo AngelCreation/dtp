@@ -28,11 +28,7 @@ import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.Part;
 
 import org.apache.poi.hssf.usermodel.HSSFWorkbook;
-import org.apache.poi.hwpf.HWPFDocument;
-import org.apache.poi.hwpf.usermodel.Range;
-import org.apache.poi.hwpf.usermodel.Table;
 import org.apache.poi.openxml4j.opc.OPCPackage;
-import org.apache.poi.poifs.filesystem.POIFSFileSystem;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.DateUtil;
 import org.apache.poi.ss.usermodel.Row;
@@ -77,15 +73,18 @@ public class ImageUploadServlet extends HttpServlet {
 		PrintWriter out = response.getWriter();
 		String filename = "";
 		try {
-			System.out.println("###filename#####" + request.getParameter("filename"));
+			// System.out.println("###filename#####" +
+			// request.getParameter("filename"));
 			String fullPath = request.getServletContext().getRealPath("");
 			String finalpath = "";
 			String fullPath1 = request.getServletContext().getContextPath();
-			System.out.println("fullPath :: fullPath :: " + fullPath);
+			// System.out.println("fullPath :: fullPath :: " + fullPath);
 			this.log("fullPath : " + fullPath);
 			File uploadDir1 = new File(fullPath);
-			System.out.println("uploadDir1 :: uploadDir1 :: " + uploadDir1.toString());
-			System.out.println("uploadDir1 :: uploadDir1 :: " + uploadDir1.getParent());
+			// System.out.println("uploadDir1 :: uploadDir1 :: " +
+			// uploadDir1.toString());
+			// System.out.println("uploadDir1 :: uploadDir1 :: " +
+			// uploadDir1.getParent());
 			this.log("uploadDir1 :: uploadDir1 :: " + uploadDir1.toString());
 			this.log("uploadDir1 :: uploadDir1 :: " + uploadDir1.getParent());
 			if (uploadDir1.toString().endsWith("FileUpload")) {
@@ -94,14 +93,14 @@ public class ImageUploadServlet extends HttpServlet {
 				File nfile = new File(uploadDir1.getParent());
 				finalpath = nfile.getParent() + File.separator + "DocUpload";
 			}
-			System.out.println("finalpath :: finalpath :: " + finalpath);
+			// System.out.println("finalpath :: finalpath :: " + finalpath);
 			this.log("finalpath :: finalpath :: " + finalpath);
 			File configDir = new File(System.getProperty("catalina.base"), "DocUpload");
 			// QuartzJob.parentPath = finalpath;
 			String parentPath = finalpath;
 			String uploadfile = request.getParameter("filename");
 			String uploadfileSize = request.getParameter("fileSize");
-			System.out.println("Received file size :: " + uploadfileSize);
+			// System.out.println("Received file size :: " + uploadfileSize);
 			boolean fileCopied = false;
 			boolean dirCreated = true;
 			File parentDir = new File(parentPath);
@@ -113,24 +112,27 @@ public class ImageUploadServlet extends HttpServlet {
 				String newfilename = sdf.format(new Date()).replaceAll("-", "").replaceAll(":", "").replaceAll("\\.",
 						"");
 				if (uploadfile != null) {
-					String ext = ImageUploadServlet.getFileExtension(new File(uploadfile));
-					System.out.println("File extension is: " + ext);
+					String ext = getFileExtension(new File(uploadfile));
+					// System.out.println("File extension is: " + ext);
 					filename = parentPath + "/" + newfilename + "." + ext;
 					for (Part part : request.getParts()) {
 						part.write(filename);
 					}
 					File file = new File(filename);
-					System.out.println("Uploaded file size :: " + file.length());
+					// System.out.println("Uploaded file size :: " +
+					// file.length());
 					String sizeAfterUpload = file.length() + "";
 					if (sizeAfterUpload.equals(uploadfileSize)) {
-						String pdffile = ImageUploadServlet.createPDF(new File(filename), parentPath, ext);
-						System.out.println("pdffile ::pdffile :: " + pdffile);
+						String pdffile = createPDF(new File(filename), parentPath, ext);
+						// System.out.println("pdffile ::pdffile :: " +
+						// pdffile);
 						this.log("pdffile ::pdffile :: " + pdffile);
 						if (new File(filename).exists()) {
 							new File(filename).delete();
 						}
 						File temp = new File(parentPath + "/" + pdffile);
-						System.out.println("temp.length() :: " + temp.length());
+						// System.out.println("temp.length() :: " +
+						// temp.length());
 
 						out.println(temp.length() + ":" + pdffile);
 
@@ -150,7 +152,7 @@ public class ImageUploadServlet extends HttpServlet {
 		}
 	}
 
-	private static String getFileExtension(File file) {
+	private String getFileExtension(File file) {
 		String fileName = file.getName();
 		if (fileName.lastIndexOf(".") != -1 && fileName.lastIndexOf(".") != 0) {
 			return fileName.substring(fileName.lastIndexOf(".") + 1);
@@ -158,72 +160,65 @@ public class ImageUploadServlet extends HttpServlet {
 		return "";
 	}
 
-	public static void deleteFilesOlderThanNdays(int daysBack, String dirWay) {
-		try {
-			System.out.println("dirWay : :dirWay : :" + dirWay);
-			File directory = new File(dirWay);
-			if (directory.exists()) {
-				File[] listFiles = directory.listFiles();
-				long purgeTime = System.currentTimeMillis() - (long) (daysBack * 6 * 60 * 60 * 1000);
-				for (File listFile : listFiles) {
-					if (listFile.lastModified() >= purgeTime || listFile.delete())
-						continue;
-					System.err.println("Unable to delete file: " + listFile);
-				}
-			}
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-	}
-
-	private static String createPDF(File file, String parentPath, String ext) {
+	private String createPDF(File file, String parentPath, String ext) {
 		try {
 			block54: {
 				long start = System.currentTimeMillis();
 				document = new Document(PageSize.A4, 36.0f, 72.0f, 108.0f, 180.0f);
-				if (file.toString().endsWith(".doc")) {
-					boolean isTableAdded = false;
+				if (file.toString().endsWith(".docx") || file.toString().endsWith(".doc")
+						|| file.toString().endsWith(".xls") || file.toString().endsWith(".xlsx")
+						|| file.toString().endsWith(".ods") || file.toString().endsWith(".odt")) {
+					// boolean isTableAdded = false;
 					try {
-						FileInputStream fis = new FileInputStream(file);
-						POIFSFileSystem fs = new POIFSFileSystem((InputStream) fis);
-						HWPFDocument doc = new HWPFDocument(fs);
-						document.open();
+						// FileInputStream fis = new FileInputStream(file);
+						// POIFSFileSystem fs = new
+						// POIFSFileSystem((InputStream) fis);
+						// HWPFDocument doc = new HWPFDocument(fs);
+						// document.open();
 						outputFile = new SimpleDateFormat("yyyyMMddhhmmss'.pdf'").format(new Date());
 						String outputFile1 = parentPath + "/" + outputFile;
-						PdfWriter pdfWriter = PdfWriter.getInstance((Document) document,
-								(OutputStream) new FileOutputStream(outputFile1));
-						Range range = doc.getRange();
-						int firstIndexOfTableParagraph = 0;
-						for (int check = 0; check < range.numParagraphs(); ++check) {
-							if (!range.getParagraph(check).isInTable())
-								continue;
-							firstIndexOfTableParagraph = check;
-							break;
-						}
-						org.apache.poi.hwpf.usermodel.Paragraph tablePar = range
-								.getParagraph(firstIndexOfTableParagraph);
-						Table table = range.getTable(tablePar);
-						PdfPTable tableInPDF = new PdfPTable(table.getRow(0).numCells());
-						int j = 0;
-						for (int i = 0; i < range.numParagraphs(); ++i) {
-							org.apache.poi.hwpf.usermodel.Paragraph par = range.getParagraph(i);
-							// System.out.println("TYPE IS :: " + par.type());
-							if (par.isInTable()) {
-								String temp = par.text().toString();
-								tableInPDF.addCell(par.text().toString());
-								isTableAdded = true;
-								++j;
-								continue;
-							}
-							if (isTableAdded) {
-								document.open();
-								document.add((Element) tableInPDF);
-								isTableAdded = false;
-							}
-							document.add((Element) new Paragraph(par.text().toString()));
-						}
-						document.close();
-						pdfWriter.close();
+						File out = new File(outputFile1);
+						new OpenOfficeConverter()
+								.ConvertToPDF(new String[] { file.getAbsolutePath(), out.getAbsolutePath() });
+						// PdfWriter pdfWriter =
+						// PdfWriter.getInstance((Document) document,
+						// (OutputStream) new FileOutputStream(outputFile1));
+						// Range range = doc.getRange();
+						// int firstIndexOfTableParagraph = 0;
+						// for (int check = 0; check < range.numParagraphs();
+						// ++check) {
+						// if (!range.getParagraph(check).isInTable())
+						// continue;
+						// firstIndexOfTableParagraph = check;
+						// break;
+						// }
+						// org.apache.poi.hwpf.usermodel.Paragraph tablePar =
+						// range
+						// .getParagraph(firstIndexOfTableParagraph);
+						// Table table = range.getTable(tablePar);
+						// PdfPTable tableInPDF = new
+						// PdfPTable(table.getRow(0).numCells());
+						// int j = 0;
+						// for (int i = 0; i < range.numParagraphs(); ++i) {
+						// org.apache.poi.hwpf.usermodel.Paragraph par =
+						// range.getParagraph(i);
+						// System.out.println("TYPE IS :: " + par.type());
+						// if (par.isInTable()) {
+						// String temp = par.text().toString();
+						// tableInPDF.addCell(par.text().toString());
+						// isTableAdded = true;
+						// ++j;
+						// continue;
+						// }
+						// if (isTableAdded) {
+						// document.add((Element) tableInPDF);
+						// isTableAdded = false;
+						// }
+						// document.add((Element) new
+						// Paragraph(par.text().toString()));
+						// }
+						// document.close();
+						// pdfWriter.close();
 					} catch (Exception e) {
 						outputFile = "";
 						e.printStackTrace();
@@ -250,8 +245,8 @@ public class ImageUploadServlet extends HttpServlet {
 						outputFile = sdf.format(new Date()).replaceAll("-", "").replaceAll(":", "").replaceAll("\\.",
 								"") + ".pdf";
 						String outputFile1 = parentPath + "/" + outputFile;
-						Workbook workbook = ImageUploadServlet.loadSpreadSheet(file);
-						ImageUploadServlet.readSpreadSheet(workbook, outputFile1);
+						Workbook workbook = loadSpreadSheet(file);
+						readSpreadSheet(workbook, outputFile1);
 					} catch (FileNotFoundException e) {
 						System.err.println("Excel File (or) PDF File is already opened. Please close the file");
 					} catch (Exception e) {
@@ -263,7 +258,8 @@ public class ImageUploadServlet extends HttpServlet {
 					try {
 						outputFile = new SimpleDateFormat("yyyyMMddhhmmss'.pdf'").format(new Date());
 						String outputFile1 = parentPath + "/" + outputFile;
-						System.out.println("Inside CSV File" + file.toString());
+						// System.out.println("Inside CSV File" +
+						// file.toString());
 						reader = new CSVReader((Reader) new FileReader(file.toString()));
 						PdfWriter pdfWriter = PdfWriter.getInstance((Document) document,
 								(OutputStream) new FileOutputStream(outputFile1));
@@ -273,7 +269,8 @@ public class ImageUploadServlet extends HttpServlet {
 						for (int i = 0; i < entryList.size(); ++i) {
 							String[] strings = (String[]) entryList.get(i);
 							for (int j = 0; j < strings.length; ++j) {
-								System.out.println("Strings" + strings.length);
+								// System.out.println("Strings" +
+								// strings.length);
 								PdfPCell cell = new PdfPCell(new Phrase(strings[j]));
 								csvTable.addCell(cell);
 							}
@@ -315,9 +312,10 @@ public class ImageUploadServlet extends HttpServlet {
 								}
 								break block54;
 							}
-							System.out.println("no such file exists!");
+							// System.out.println("no such file exists!");
 						} catch (Exception e) {
-							System.out.println("Exception: " + e.getMessage());
+							// System.out.println("Exception: " +
+							// e.getMessage());
 							outputFile = "";
 						} finally {
 							try {
@@ -401,9 +399,9 @@ public class ImageUploadServlet extends HttpServlet {
 		}
 	}
 
-	private static Workbook loadSpreadSheet(File xlsFile) throws Exception {
+	private Workbook loadSpreadSheet(File xlsFile) throws Exception {
 		XSSFWorkbook workbook = null;
-		String ext = ImageUploadServlet.getFileExtension(xlsFile.getName());
+		String ext = getFileExtension(xlsFile.getName());
 		if (ext.equalsIgnoreCase("xlsx")) {
 			OPCPackage pkg = OPCPackage.open((String) xlsFile.getAbsolutePath());
 			workbook = new XSSFWorkbook(pkg);
@@ -418,15 +416,15 @@ public class ImageUploadServlet extends HttpServlet {
 		return workbook;
 	}
 
-	private static String getFileExtension(String fileName) {
+	private String getFileExtension(String fileName) {
 		String ext = "";
 		int mid = fileName.lastIndexOf(".");
 		ext = fileName.substring(mid + 1, fileName.length());
-		System.out.println("File Extension --" + ext);
+		// System.out.println("File Extension --" + ext);
 		return ext;
 	}
 
-	private static void readSpreadSheet(Workbook workbook, String outputFile1) throws IOException, DocumentException {
+	private void readSpreadSheet(Workbook workbook, String outputFile1) throws IOException, DocumentException {
 		int numberOfColumns = 0;
 		Document document = new Document(PageSize.A4, 36.0f, 72.0f, 108.0f, 180.0f);
 		PdfWriter.getInstance((Document) document, (OutputStream) new FileOutputStream(outputFile1));
@@ -478,21 +476,18 @@ public class ImageUploadServlet extends HttpServlet {
 						c1.setHorizontalAlignment(1);
 						table.addCell(c1);
 					} else {
-						cellNumber = ImageUploadServlet.checkEmptyCellAndAddCellContentToPDFTable(cellNumber, cell,
-								table, workbook);
+						cellNumber = checkEmptyCellAndAddCellContentToPDFTable(cellNumber, cell, table, workbook);
 					}
 					++cellNumber;
 					break;
 				}
 				case 0: {
-					cellNumber = ImageUploadServlet.checkEmptyCellAndAddCellContentToPDFTable(cellNumber, cell, table,
-							workbook);
+					cellNumber = checkEmptyCellAndAddCellContentToPDFTable(cellNumber, cell, table, workbook);
 					++cellNumber;
 					break;
 				}
 				case 4: {
-					cellNumber = ImageUploadServlet.checkEmptyCellAndAddCellContentToPDFTable(cellNumber, cell, table,
-							workbook);
+					cellNumber = checkEmptyCellAndAddCellContentToPDFTable(cellNumber, cell, table, workbook);
 					++cellNumber;
 				}
 				}
@@ -508,13 +503,13 @@ public class ImageUploadServlet extends HttpServlet {
 		document.close();
 	}
 
-	private static void addEmptyLine(Paragraph paragraph, int number) {
+	private void addEmptyLine(Paragraph paragraph, int number) {
 		for (int i = 0; i < number; ++i) {
 			paragraph.add((Object) new Paragraph(" "));
 		}
 	}
 
-	private static int checkEmptyCellAndAddCellContentToPDFTable(int cellNumber, Cell cell, PdfPTable table,
+	private int checkEmptyCellAndAddCellContentToPDFTable(int cellNumber, Cell cell, PdfPTable table,
 			Workbook workbook) {
 		boolean boldWeight;
 		Calendar date;
@@ -576,7 +571,7 @@ public class ImageUploadServlet extends HttpServlet {
 						cal.set(14, date.get(14));
 						SimpleDateFormat sdf = new SimpleDateFormat("MM/dd/yyyy");
 						String cell1 = sdf.format(cell.getDateCellValue());
-						System.out.println("cell1" + cell1);
+						// System.out.println("cell1" + cell1);
 						table.addCell(cell1);
 					} else {
 						table_cell = new PdfPCell(
@@ -608,9 +603,5 @@ public class ImageUploadServlet extends HttpServlet {
 
 	public String getServletInfo() {
 		return "Short description";
-	}
-
-	static {
-		outputFile = "";
 	}
 }
