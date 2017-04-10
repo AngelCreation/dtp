@@ -1,0 +1,107 @@
+package com.samyak.servlet;
+
+import java.io.File;
+
+import com.sun.star.beans.PropertyValue;
+import com.sun.star.comp.helper.BootstrapException;
+import com.sun.star.frame.XComponentLoader;
+import com.sun.star.frame.XDesktop;
+import com.sun.star.frame.XStorable;
+import com.sun.star.io.IOException;
+import com.sun.star.lang.XComponent;
+import com.sun.star.lang.XMultiComponentFactory;
+import com.sun.star.uno.Exception;
+import com.sun.star.uno.UnoRuntime;
+import com.sun.star.uno.XComponentContext;
+import com.sun.star.util.XCloseable;
+
+import ooo.connector.BootstrapSocketConnector;
+
+public class OpenOfficeConverter {
+
+	// public void ConvertToPDF(File file, String parentPath,String
+	// outputfilepath) throws Exception {
+
+	XDesktop xDesktop;
+
+	public void ConvertToPDF(String[] args) {
+
+		// Initialise
+		// Class.forName("Bootstrap");
+		// XComponentContext xContext = Bootstrap.bootstrap();
+
+		try {
+			args[0] = args[0].replace('\\', '/');
+			args[1] = args[1].replace('\\', '/');
+			// args[1]=args[1].replaceAll("\\", "/");
+			XComponentContext xContext = BootstrapSocketConnector.bootstrap("C:/Program Files/LibreOffice 5/program");
+
+			XMultiComponentFactory xMCF = xContext.getServiceManager();
+
+			Object oDesktop = xMCF.createInstanceWithContext("com.sun.star.frame.Desktop", xContext);
+
+			xDesktop = (XDesktop) UnoRuntime.queryInterface(XDesktop.class, oDesktop);
+			// String workingDir = "C:/Users/sdas.SIPL/Downloads/";
+			// String myTemplate = "tests-example.xls";
+
+			// if (!new File(workingDir + myTemplate).canRead()) {
+			if (!new File(args[0]).canRead()) {
+				throw new RuntimeException("Cannot load template:" + new File(args[0]));
+				// throw new RuntimeException("Cannot load template:" + new
+				// File(workingDir + myTemplate));
+			}
+
+			XComponentLoader xCompLoader = (XComponentLoader) UnoRuntime
+					.queryInterface(com.sun.star.frame.XComponentLoader.class, xDesktop);
+
+			// String sUrl = "file:///" + workingDir + myTemplate;
+			String sUrl = "file:///" + args[0];
+
+			PropertyValue[] propertyValues = new PropertyValue[0];
+
+			propertyValues = new PropertyValue[1];
+			propertyValues[0] = new PropertyValue();
+			propertyValues[0].Name = "Hidden";
+			propertyValues[0].Value = new Boolean(true);
+
+			XComponent xComp = xCompLoader.loadComponentFromURL(sUrl, "_blank", 0, propertyValues);
+
+			// save as a PDF
+			XStorable xStorable = (XStorable) UnoRuntime.queryInterface(XStorable.class, xComp);
+
+			propertyValues = new PropertyValue[2];
+			propertyValues[0] = new PropertyValue();
+			propertyValues[0].Name = "Overwrite";
+			propertyValues[0].Value = new Boolean(true);
+			propertyValues[1] = new PropertyValue();
+			propertyValues[1].Name = "FilterName";
+			propertyValues[1].Value = "writer_pdf_Export";
+
+			// Appending the favoured extension to the origin document name
+			// String myResult = workingDir + "letterOutput.pdf";
+			String myResult = args[1];
+			xStorable.storeToURL("file:///" + myResult, propertyValues);
+
+			// System.out.println("Saved " + myResult);
+			XCloseable xCloseable = UnoRuntime.queryInterface(com.sun.star.util.XCloseable.class, xStorable);
+			xCloseable.close(false);
+			xCloseable = UnoRuntime.queryInterface(com.sun.star.util.XCloseable.class, xComp);
+			xCloseable.close(false);
+
+		} catch (BootstrapException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (Exception e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		// bootstrapSocketConnector.disconnect();
+
+		// xDesktop.terminate();
+		// bootstrapSocketConnector.disconnect();
+	}
+
+}
